@@ -1,0 +1,95 @@
+FORM EXCLUDE_FUNCTIONS .
+  "------------------------------------------------------------------
+  " 1. 사용할 버튼은 주석처리
+  "------------------------------------------------------------------
+*  PERFORM exclude USING 'MC_FC_SORT_ASC'          CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_SORT_DSC'          CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_FIND'              CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_FIND_MORE'         CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_MB_FILTER'            CHANGING gt_exclude01.
+  PERFORM EXCLUDE USING 'MC_MB_SUM'               CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_MB_SUBTOT'            CHANGING GT_EXCLUDE.
+*  PERFORM exclude USING 'MC_MB_EXPORT'            CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_MB_VARIANT'           CHANGING gt_exclude01.
+
+
+  "------------------------------------------------------------------
+  " 2. 사용하지 않을 버튼만 입력
+  "------------------------------------------------------------------
+
+  " 메뉴 버튼 제외
+  PERFORM EXCLUDE USING 'MC_MB_VIEW'              CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_MB_PASTE'             CHANGING GT_EXCLUDE.
+
+  " 메뉴 버튼외 버튼들 제외
+  PERFORM EXCLUDE USING 'MC_FC_HELP'              CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_INFO'              CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_VIEWS'             CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_GRAPH'             CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_PRINT'             CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_DETAIL'            CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_REFRESH'           CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_CUT'           CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_UNDO'          CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_COPY'          CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_PASTE'         CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_COPY_ROW'      CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_MOVE_ROW'      CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_DELETE_ROW'    CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_INSERT_ROW'    CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_APPEND_ROW'    CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_WORD_PROCESSOR'    CHANGING GT_EXCLUDE.
+  PERFORM EXCLUDE USING 'MC_FC_LOC_PASTE_NEW_ROW' CHANGING GT_EXCLUDE.
+
+  "------------------------------------------------------------------
+  " 전체 제외 할 경우는 주석제외 후 활성화
+  "------------------------------------------------------------------
+*  PERFORM exclude USING 'MC_FC_EXCL_ALL'          CHANGING gt_exclude01.
+
+
+ENDFORM.
+
+
+FORM EXCLUDE    USING PV_UINAME
+             CHANGING PT_EXCLUDE TYPE STANDARD TABLE.
+
+  DATA LV_TEXT      TYPE STRING.
+  DATA LV_CNAME(30) TYPE C VALUE 'CL_GUI_ALV_GRID'.
+
+  FIELD-SYMBOLS: <EXCLUDE> TYPE ANY.
+
+  CLEAR LV_TEXT.
+  UNASSIGN <EXCLUDE>.
+
+  CONCATENATE LV_CNAME '=>' PV_UINAME INTO LV_TEXT.
+  ASSIGN (LV_TEXT) TO <EXCLUDE>.
+
+  CHECK <EXCLUDE> IS ASSIGNED AND <EXCLUDE> <> ''.
+  APPEND <EXCLUDE> TO PT_EXCLUDE.
+
+ENDFORM.
+
+
+FORM ALV_DISPLAY .
+
+  CALL METHOD GO_GRID->SET_TABLE_FOR_FIRST_DISPLAY
+    EXPORTING
+      IS_LAYOUT                     = GS_LVC_LAYO
+      IT_TOOLBAR_EXCLUDING          = GT_EXCLUDE
+      I_SAVE                        = 'U'
+      IS_VARIANT                    = GS_VARIANT
+    CHANGING
+      IT_OUTTAB                     = GT_ITAB
+      IT_FIELDCATALOG               = GT_LVC_FCAT
+    EXCEPTIONS
+      INVALID_PARAMETER_COMBINATION = 1
+      PROGRAM_ERROR                 = 2
+      TOO_MANY_LINES                = 3
+      OTHERS                        = 4.
+
+  IF SY-SUBRC <> 0.
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+               WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDFORM.
