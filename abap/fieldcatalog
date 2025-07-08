@@ -1,0 +1,41 @@
+FORM SET_FIELDCATALOG USING PT_FCAT TYPE LVC_T_FCAT
+                             PV_FIELD
+                             PV_TEXT
+                             PV_REF_TABLE
+                             PV_REF_FIELD
+                             PV_KEY
+                             PV_EDIT
+                             PV_NO_OUT
+                             PV_LEN
+                             PV_SUM
+                             PV_HOT
+                             PV_NO_ZERO
+                             PV_JUST.
+
+  GS_FCAT-FIELDNAME = PV_FIELD.
+  GS_FCAT-COLTEXT = PV_TEXT.
+  GS_FCAT-REF_TABLE = PV_REF_TABLE.
+  GS_FCAT-REF_FIELD = PV_REF_FIELD.
+  GS_FCAT-KEY = PV_KEY.
+  GS_FCAT-EDIT = PV_EDIT.
+  GS_FCAT-NO_OUT = PV_NO_OUT.
+  GS_FCAT-OUTPUTLEN = PV_LEN.
+  GS_FCAT-DO_SUM = PV_SUM.
+  GS_FCAT-HOTSPOT = PV_HOT.
+  GS_FCAT-NO_ZERO = PV_NO_ZERO.
+  GS_FCAT-JUST = PV_JUST.
+
+  APPEND GS_FCAT TO PT_FCAT.
+  CLEAR GS_FCAT.
+
+ENDFORM.
+
+PERFORM SET_FIELDCATALOG USING GT_FCAT:
+    "FIELDNAME"   "COLTEXT"          "REF_TABLE  "REF_FIELD  "KEY  "EDIT "NO_OUT "OUTPUTLEN  "DO_SUM "HOTSPOT "NO_ZERO  "JUST
+    'BUKRS'       '회사코드'         'BKPF'      'BUKRS'     'X'   ' '   ' '     '5'         ' '      ' '      ' '      'C',
+    'cnt_24_20'       '24~20H'           ' '         'cnt_24_20'     ' '   ' '   ' '     '6'         ' '      ' '      ' '      'C',
+    'cnt_20_16'       '20~16H'           ' '         'cnt_20_16'     ' '   ' '   ' '     '6'         ' '      ' '      ' '      'C',
+    'cnt_16_12'       '16~12H'           ' '         'cnt_16_12'     ' '   ' '   ' '     '6'         ' '      ' '      ' '      'C',
+    'cnt_12_08'       '12~8H'            ' '         'cnt_12_08'     ' '   ' '   ' '     '6'         ' '      ' '      ' '      'C',
+    'cnt_08_04'       '8~4H'             ' '         'cnt_08_04'     ' '   ' '   ' '     '6'         ' '      ' '      ' '      'C',
+    'cnt_04_00'       '4~0H'             ' '         'cnt_04_00'     ' '   ' '   ' '     '6'         ' '      ' '      ' '      'C'.
