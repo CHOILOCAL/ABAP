@@ -1,0 +1,134 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFLIGHT_EXC_UPDOWNLOAD2_TOP
+*&---------------------------------------------------------------------*
+REPORT ZFLIGHT_EXC_UPDOWNLOAD2 MESSAGE-ID zjune01.
+
+TABLES: sscrfields, sbook.
+
+DATA: ok_code TYPE sy-ucomm.
+
+" Excel
+TYPES: t_c(1500) TYPE c,
+       tt_data   TYPE TABLE OF t_c.
+
+DATA : gt_ole TYPE tt_data,
+       gs_ole TYPE t_c.
+
+DATA: gs_spfli TYPE spfli,
+      gt_spfli TYPE TABLE OF spfli.
+
+DATA : go_dock TYPE REF TO cl_gui_docking_container,
+       go_alv  TYPE REF TO cl_gui_alv_grid.
+
+DATA : gs_fcat type lvc_s_fcat,
+      gt_fcat    TYPE lvc_t_fcat,
+       gs_variant TYPE disvariant,
+       gs_layo    TYPE lvc_s_layo.
+
+DATA : gv_file     TYPE rlgrap-filename,
+       gt_file     TYPE filetable,
+       gv_rc       TYPE i,
+       gv_filename TYPE string,
+       gv_path     TYPE string,
+       gv_fullpath TYPE string.
+
+DATA : BEGIN OF gs_data,
+         upload_sts TYPE icon-id,
+         upload_msg TYPE c LENGTH 30,
+         seat_sts   TYPE icon-name,
+         seat_msg   TYPE c LENGTH 50,
+         line       TYPE c LENGTH 3,
+         carrid     TYPE sflight-carrid,
+         carrname   TYPE scarr-carrname,
+         connid     TYPE sflight-connid,
+         countryfr  TYPE spfli-countryfr,
+         cityfrom   TYPE spfli-cityfrom,
+         airpfrom   TYPE spfli-airpfrom,
+         countryto  TYPE spfli-countryto,
+         cityto     TYPE spfli-cityto,
+         airpto     TYPE spfli-airpto,
+         fldate     TYPE sflight-fldate,
+         price      TYPE sflight-price,
+         currency   TYPE sflight-currency,
+*         currdec    TYPE scurx-currdec,
+         planetype  TYPE sflight-planetype,
+         seatsmax   TYPE sflight-seatsmax,
+         seatsocc   TYPE sflight-seatsocc,
+         paymentsum TYPE sflight-paymentsum,
+         seatsmax_b TYPE sflight-seatsmax_b,
+         seatsocc_b TYPE sflight-seatsocc_b,
+         seatsmax_f TYPE sflight-seatsmax_f,
+         seatsocc_f TYPE sflight-seatsocc_f,
+         cellstyle    TYPE lvc_t_styl,
+       END OF gs_data,
+       gt_data LIKE TABLE OF gs_data,
+
+       BEGIN OF gs_excel,
+         fldate     TYPE sflight-fldate,
+         price      TYPE sflight-price,
+         currency   TYPE sflight-currency,
+*         currdec    TYPE scurx-currdec,
+         planetype  TYPE sflight-planetype,
+         seatsmax   TYPE sflight-seatsmax,
+         seatsocc   TYPE sflight-seatsocc,
+         paymentsum TYPE sflight-paymentsum,
+         seatsmax_b TYPE sflight-seatsmax_b,
+         seatsocc_b TYPE sflight-seatsocc_b,
+         seatsmax_f TYPE sflight-seatsmax_f,
+         seatsocc_f TYPE sflight-seatsocc_f,
+         celltab    TYPE lvc_t_styl,
+       END OF gs_excel,
+       gt_excel LIKE TABLE OF gs_excel.
+
+DATA : gs_layout  TYPE lvc_s_layo,
+       gs_cell    TYPE lvc_s_styl,
+       gs_exclude TYPE ui_func,
+       gt_exclude TYPE ui_functions.
+*       gs_dfies   TYPE dfies,
+*       gt_dfies   TYPE TABLE OF dfies.
+
+DATA : gt_roid TYPE lvc_t_roid,
+       gs_roid TYPE lvc_s_roid.
+
+* 핫스팟 ALV용
+DATA: gt_dfies TYPE ddfields,
+      gs_dfies TYPE LINE OF ddfields,
+      gr_car   TYPE RANGE OF s_carr_id WITH HEADER LINE,
+      gr_con   TYPE RANGE OF s_conn_id WITH HEADER LINE.
+
+DATA: BEGIN OF gs_book,
+        carrid     TYPE scarr-carrid,
+        carrname   TYPE scarr-carrname,
+        connid     TYPE sbook-connid,
+        fldate     TYPE sbook-fldate,
+        bookid     TYPE sbook-bookid,
+        customid   TYPE sbook-customid,
+        name       TYPE scustom-name,
+        telephone  TYPE scustom-telephone,
+        custtype   TYPE sbook-custtype,
+        type_text  TYPE c LENGTH 100,
+        loccuram   TYPE sbook-loccuram,
+        loccurkey  TYPE sbook-loccurkey,
+        order_date TYPE sbook-order_date,
+        bt_days    TYPE i,
+        cancelled  TYPE sbook-cancelled,
+      END OF gs_book,
+      gt_book LIKE TABLE OF gs_book,
+
+      BEGIN OF gs_cust,
+        carrid    TYPE scarr-carrid,
+        carrname  TYPE scarr-carrname,
+        customid  TYPE sbook-customid,
+        name      TYPE scustom-name,
+        telephone TYPE scustom-telephone,
+        loccuram  TYPE sbook-loccuram,
+        loccurkey TYPE sbook-loccurkey,
+      END OF gs_cust,
+      gt_cust LIKE TABLE OF gs_cust.
+
+DATA: go_salv    TYPE REF TO cl_salv_table,
+      go_func    TYPE REF TO cl_salv_functions,
+      go_selc    TYPE REF TO cl_salv_selections,
+      go_disp    TYPE REF TO cl_salv_display_settings,
+      go_columns TYPE REF TO cl_salv_columns_table,
+      go_column  TYPE REF TO cl_salv_column_table.

@@ -1,0 +1,51 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFLIGHT_EXC_UPDOWNLOAD2_CLS
+*&---------------------------------------------------------------------*
+CLASS lcl_handler DEFINITION.
+  PUBLIC SECTION.
+    CLASS-METHODS :
+
+      on_hotspot_click FOR EVENT hotspot_click OF cl_gui_alv_grid
+        IMPORTING es_row_no,
+
+      on_toolbar FOR EVENT toolbar OF cl_gui_alv_grid
+        IMPORTING e_object,
+
+      on_user_command FOR EVENT user_command OF cl_gui_alv_grid
+        IMPORTING e_ucomm,
+
+      on_data_changed_finished FOR EVENT data_changed_finished OF cl_gui_alv_grid
+        IMPORTING et_good_cells e_modified.
+
+ENDCLASS.
+
+CLASS lcl_handler IMPLEMENTATION.
+
+  METHOD on_hotspot_click.
+    PERFORM handler_hotspot_click USING es_row_no.
+  ENDMETHOD.
+
+  METHOD on_toolbar.
+    PERFORM handle_toolbar USING e_object->mt_toolbar.
+  ENDMETHOD.
+
+  METHOD on_user_command.
+    CASE e_ucomm.
+      WHEN 'COUN'.
+        PERFORM count_line.
+      WHEN 'INSE'.
+        PERFORM insert_line.
+      WHEN 'DELE'.
+        PERFORM delete_line.
+      WHEN 'COPY'.
+        PERFORM copy_line.
+    ENDCASE.
+  ENDMETHOD.
+
+  METHOD on_data_changed_finished.
+    IF e_modified = 'X' AND et_good_cells IS NOT INITIAL.
+      PERFORM handle_changed_data USING et_good_cells.
+    ENDIF.
+  ENDMETHOD.
+
+ENDCLASS.

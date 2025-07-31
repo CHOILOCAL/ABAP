@@ -1,0 +1,50 @@
+*&---------------------------------------------------------------------*
+*& Report ZFLIGHT_EXC_UPDOWNLOAD2
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+INCLUDE zflight_exc_updownload2_top.
+INCLUDE zflight_exc_updownload2_cls.
+INCLUDE zflight_exc_updownload2_scr.
+INCLUDE zflight_exc_updownload2_f01.
+INCLUDE zflight_exc_updownload2_i01.
+INCLUDE zflight_exc_updownload2_o01.
+
+" 사용자가 Selection Screen을 입력 하기 전
+
+INITIALIZATION.
+
+  " ICON, 버튼명
+  CONCATENATE icon_xls '엑셀 양식 다운로드' INTO sscrfields-functxt_01.
+  CONCATENATE icon_xls 'SMW0 다운로드' INTO sscrfields-functxt_02.
+
+AT SELECTION-SCREEN OUTPUT.
+
+  PERFORM get_carrnm using p_carrid. " 화면 띄우자마자 carrid에 있는 carrname 보여주기
+  PERFORM check_conn using p_carrid p_connid.
+
+AT SELECTION-SCREEN.
+  PERFORM user_fucn.
+
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_file.
+  PERFORM F4_file.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_carrid.
+  PERFORM F4_carrid.
+
+  " Report Program 메인 실행 블록
+
+START-OF-SELECTION.
+
+  " START-OF-SELECTION 이후 실행되는 블록
+
+END-OF-SELECTION.
+
+  PERFORM get_carrnm using p_carrid. " carrid 바뀔 경우 carrnam 바꿔주기
+
+  PERFORM check_conn using p_carrid p_connid. " connid 유효한지 확인
+
+  PERFORM upload_data.
+
+  PERFORM call_screen.

@@ -1,0 +1,1280 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFLIGHT_EXC_UPDOWNLOAD2_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form get_carrnm
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM get_carrnm USING pv_carrid.
+
+  CLEAR: gv_cname.
+
+  SELECT SINGLE carrname
+        FROM scarr
+        INTO gv_cname
+        WHERE carrid = pv_carrid.
+
+  IF sy-subrc NE 0.
+    MESSAGE s016(pn) WITH '등록되지 않은 항공사 코드입니다.' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+    CLEAR gv_cname.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form get_connid
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+*FORM get_connid .
+*
+*  SELECT SINGLE *
+*      FROM spfli
+*      INTO CORRESPONDING FIELDS OF gs_spfli
+*      WHERE carrid = p_carrid
+*      AND connid = p_connid.
+*
+*    IF sy-subrc <> 0.
+*      MESSAGE s016(pn) WITH '연결번호 정보가 존재하지 않습니다' DISPLAY LIKE 'E'.
+**      LEAVE LIST-PROCESSING.
+*    ENDIF.
+*
+*ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_grid
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM set_grid .
+
+  " 컨테이너 생성
+  CREATE OBJECT go_dock
+    EXPORTING
+      repid     = sy-repid
+      dynnr     = sy-dynnr
+      extension = 5000.
+
+  " ALV -> 컨테이너
+  CREATE OBJECT go_alv
+    EXPORTING
+      i_parent = go_dock.
+
+  PERFORM set_layout USING gs_layo.
+  PERFORM set_variant.
+
+  PERFORM set_field_catalog USING :
+        "FIELDNAME        "COLTEXT               "REF_TABLE     "REF_FIELD           "EDIT
+        'UPLOAD_STS'      '업로드 상태'           ' '           ' '                  ' ',
+        'UPLOAD_MSG'      '업로드 메세지'         ' '           ' '                  ' ',
+        'SEAT_STS'        '좌석 상태'             ' '           ' '                  ' ',
+        'SEAT_MSG'        '좌석 메세지'           ' '           ' '                  ' ',
+        'LINE'            '순번'                  ' '           ' '                  ' ',
+        'CARRID'          '항공사코드'            'SFLIGHT'     'CARRID'             ' ',
+        'CARRNAME'        '항공사이름'            'SCARR'       'CARRNAME'           ' ',
+        'CONNID'          '항공편 연결번호'       'SFLIGHT'     'CONNID'             ' ',
+        'COUNTRYFR'       '출발국가'              'SPFLI'       'COUNTRYFR'          ' ',
+        'CITYFROM'        '출발도시'              'SPFLI'       'CITYFROM'           ' ',
+        'AIRPFROM'        '출발공항'              'SPFLI'       'AIRPFROM'           ' ',
+        'COUNTRYTO'       '도착국가'              'SPFLI'       'COUNTRYTO'          ' ',
+        'CITYTO'          '도착도시'              'SPFLI'       'CITYTO'             ' ',
+        'AIRPTO'          '도착공항'              'SPFLI'       'AIRPTO'             ' ',
+        'FLDATE'          '항공편 일자'           'SFLIGHT'     'FLDATE'             ' ',
+        'PRICE'           '항공금액'              'SFLIGHT'     'PRICE'              ' ',
+        'CURRENCY'        '항공사현지통화'        'SFLIGHT'     'CURRENCY'           ' ',
+*        'CURRDEC'         '통화 소수점'           'SFLIGHT'     'CURRDEC'            ' ',
+        'PLANETYPE'       '항공기유형'            'SFLIGHT'     'PLANETYPE'          ' ',
+        'SEATSMAX'        '일반석 최대정원'       'SFLIGHT'     'SEATSMAX'           ' ',
+        'SEATSOCC'        '일반석 예약좌석'       'SFLIGHT'     'SEATSOCC'           'X',
+        'PAYMENTSUM'      '예약 총계'             'SFLIGHT'     'PAYMENTSUM'         ' ',
+        'SEATSMAX_B'      '비즈니스석 최대정원'   'SFLIGHT'     'SEATSMAX_B'         ' ',
+        'SEATSOCC_B'      '비즈니스석 예약좌석'   'SFLIGHT'     'SEATSOCC_B'         'X',
+        'SEATSMAX_F'      '일등석 최대정원'       'SFLIGHT'     'SEATSMAX_F'         ' ',
+        'SEATSOCC_F'      '일등석 예약좌석'       'SFLIGHT'     'SEATSOCC_F'         'X'.
+
+  PERFORM remove_toolbar USING :
+      cl_gui_alv_grid=>mc_fc_loc_undo,
+      cl_gui_alv_grid=>mc_fc_loc_copy,
+      cl_gui_alv_grid=>mc_fc_loc_copy_row,
+      cl_gui_alv_grid=>mc_fc_loc_cut,
+      cl_gui_alv_grid=>mc_fc_loc_delete_row,
+      cl_gui_alv_grid=>mc_fc_loc_insert_row,
+      cl_gui_alv_grid=>mc_fc_loc_move_row,
+      cl_gui_alv_grid=>mc_fc_loc_append_row,
+      cl_gui_alv_grid=>mc_fc_loc_paste,
+      cl_gui_alv_grid=>mc_fc_loc_paste_new_row,
+      cl_gui_alv_grid=>mc_fc_refresh,
+      cl_gui_alv_grid=>mc_fc_views,
+      cl_gui_alv_grid=>mc_fc_word_processor.
+
+  SET HANDLER : lcl_handler=>on_hotspot_click FOR go_alv,
+                lcl_handler=>on_toolbar FOR go_alv,
+                lcl_handler=>on_user_command FOR go_alv,
+                lcl_handler=>on_data_changed_finished FOR go_alv.
+
+  "Edit 관련 Event1
+  CALL METHOD go_alv->register_edit_event
+    EXPORTING
+      i_event_id = cl_gui_alv_grid=>mc_evt_enter
+    EXCEPTIONS
+      error      = 1
+      OTHERS     = 2.
+
+  "Edit 관련 Event2
+  CALL METHOD go_alv->register_edit_event
+    EXPORTING
+      i_event_id = cl_gui_alv_grid=>mc_evt_modified
+    EXCEPTIONS
+      error      = 1
+      OTHERS     = 2.
+
+  CALL METHOD go_alv->set_table_for_first_display
+    EXPORTING
+      is_layout                     = gs_layo
+      it_toolbar_excluding          = gt_exclude
+    CHANGING
+      it_outtab                     = gt_data
+      it_fieldcatalog               = gt_fcat
+    EXCEPTIONS
+      invalid_parameter_combination = 1
+      program_error                 = 2
+      too_many_lines                = 3
+      OTHERS                        = 4.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form refresh_grid
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM refresh_grid .
+
+  " ALV 제어: 행/열기준 안정적, 정적 최신표시
+  " 테이블 데이터 갱신시, 현재의 스크롤 위치나 선택항 행 유지
+
+  DATA : ls_stable TYPE lvc_s_stbl.
+
+  ls_stable-col = 'X'.
+  ls_stable-row = 'X'.
+
+  CALL METHOD go_alv->refresh_table_display
+    EXPORTING
+      is_stable      = ls_stable
+      i_soft_refresh = space
+    EXCEPTIONS
+      finished       = 1
+      OTHERS         = 2.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_layout
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> GS_LAYO
+*&---------------------------------------------------------------------*
+FORM set_layout  USING lvc_s_layo.
+  gs_layo-zebra      = 'X'.
+  gs_layo-sel_mode   = 'D'. "A,D : CELL 선택, B,C : ROW 선택.
+  gs_layo-cwidth_opt = 'X'.
+  gs_layo-excp_fname = 'UPLOAD_STS'.
+  gs_layo-excp_led   = 'X'.
+  gs_layo-stylefname = 'CELLSTYLE'.
+ENDFORM.
+
+FORM set_variant .
+  gs_variant-report = sy-repid.
+  gs_variant-username = sy-uname.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form file_save_dialog
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> TEXT_T03
+*&      --> LV_FILE
+*&---------------------------------------------------------------------*
+FORM file_save_dialog  USING    pv_text
+                                pv_file.
+
+  " pv_file = XLSX, XLS 등
+
+  cl_gui_frontend_services=>file_save_dialog(
+      EXPORTING
+        window_title              = 'Excel Download'
+        default_file_name         = pv_text
+        file_filter               = pv_file  "XLS 또는 XLSX 파일 둘 다 가능
+      CHANGING
+        filename                  = gv_filename
+        path                      = gv_path
+        fullpath                  = gv_fullpath
+      EXCEPTIONS
+        cntl_error                = 1
+        error_no_gui              = 2
+        not_supported_by_gui      = 3
+        invalid_default_file_name = 4
+        OTHERS                    = 5
+      ).
+
+  IF gv_fullpath IS NOT INITIAL.
+    gv_file = gv_fullpath.
+
+    " 다운로드 성공 메시지
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form download_smw0
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM download_smw0 .
+  DATA ls_wwdata TYPE wwwdatatab.
+
+  SELECT SINGLE *
+    FROM wwwdata
+    INTO CORRESPONDING FIELDS OF ls_wwdata
+    WHERE objid = 'ZSFLIGHT'.
+
+  IF sy-subrc = 0.
+
+    CALL FUNCTION 'DOWNLOAD_WEB_OBJECT'
+      EXPORTING
+        key         = ls_wwdata
+        destination = gv_file.
+
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form download_excel
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM download_excel .
+
+  " 엑셀 자동화, 서식유지, 수동 작업 최소화를 위한 OLE 사용
+  " Excel 객제 생성, 속성 설정, 샐힝 과정
+  DATA : lv_app    TYPE ole2_object, "
+         lv_work   TYPE ole2_object,
+         lv_column TYPE ole2_object,
+         lv_rc     TYPE i,
+         lv_size   TYPE i.
+
+  CREATE OBJECT lv_app 'EXCEL.APPLICATION'. " OLE 객체 생성 (Excel을 SAP Background에서 사용 가능)
+
+  CALL METHOD OF lv_app 'WORKBOOKS' = lv_work. " Excel 파일 관리하는 Workbook 객체 생성
+  CALL METHOD OF lv_work 'ADD' = lv_work. " 새 Excel 파일 추가
+
+  GET PROPERTY OF lv_app 'ACTIVESHEET' = lv_work. " 현재 활성화된 Excel Sheet 객체
+  SET PROPERTY OF lv_work 'Name' = '항공 정보 업로드 예시'. " 시트 이름 설정
+  SET PROPERTY OF lv_app 'VISIBLE' = 1. " Excel 창을 사용자에게 표시
+
+  "양식에 들어갈 데이터 세팅
+  PERFORM set_ole_data.
+
+  "Range 세팅(색깔, 테두리)
+  PERFORM set_ole_range USING lv_work.
+
+  "Cell 세팅(폰트, 사이즈, 볼드)
+  PERFORM set_ole_cells USING :
+        '1' lv_work,
+        '2' lv_work,
+        '3' lv_work.
+
+  "클립보드에 옮기기
+  CALL METHOD cl_gui_frontend_services=>clipboard_export
+    IMPORTING
+      data                 = gt_ole
+    CHANGING
+      rc                   = lv_rc
+    EXCEPTIONS
+      cntl_error           = 1
+      error_no_gui         = 2
+      not_supported_by_gui = 3
+      OTHERS               = 4.
+
+
+
+  "해당 클립보드에 있는 내용을 Excel로 옮김
+  CALL METHOD OF lv_work 'PASTE'.
+
+  CALL METHOD OF lv_work 'Columns' = lv_column. " 모든 컬럼 선택
+  CALL METHOD OF lv_column 'AutoFit'. " 실행 자동 너비 조정
+
+  "저장할 파일 경로
+  " 1: Excel 97-2003(.xls)형식 이상
+  " 2: Excel 2007(.xls)형식 이상
+  CALL METHOD OF lv_work 'SaveAs'
+    EXPORTING
+      #1 = gv_file
+      #2 = 51. " 1 : XLS 버전 / 51 : xlsx버전임
+
+  SET PROPERTY OF lv_work 'ReadOnly' = 0. " 읽기 전용 해제 추가
+
+  " 파일 사이즈
+  CALL METHOD cl_gui_frontend_services=>file_get_size
+    EXPORTING
+      file_name                 = gv_filename "string"
+    IMPORTING
+      file_size                 = lv_size "I"
+    EXCEPTIONS
+      file_get_size_failed      = 1
+      cntl_error                = 2
+      error_no_gui              = 3
+      not_supported_by_gui      = 4
+      invalid_default_file_name = 5
+      OTHERS                    = 6.
+
+  "저장 성공 메시지 추가
+  MESSAGE s000 WITH |EXCEL Download Done(not read only):{ gv_fullpath }, { lv_size } bytes|.
+
+  CALL METHOD OF lv_work 'Close'. " 현재 엑셀 문서 닫기
+  CALL METHOD OF lv_app 'Quit'. " Excel 응용 프로그램 종료
+  FREE OBJECT : lv_work, lv_app.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F4_file
+*&---------------------------------------------------------------------*
+*& text
+*&-----------------------------------------------ㄹ---------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM F4_file .
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+    EXPORTING
+      window_title = 'Excel Upload'
+      file_filter  = 'EXCEL FILES (*.XLSX)|*.XLSX|EXCEL FILES (*.XLS)|*.XLS|'
+    CHANGING
+      file_table   = gt_file
+      rc           = gv_rc.
+
+  " 사용자가 파일을 선택했는지 확인
+  IF gt_file IS NOT INITIAL.
+    p_file = gt_file[ 1 ].
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_ole_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM set_ole_data .
+
+  " 한 행에 여러가니 데이터를 담는 Structure 구조
+  CLEAR : gs_ole, gt_ole.
+
+  DATA(lv_deli) = cl_abap_char_utilities=>horizontal_tab. " 필드 간에 구분자로 탭을 사용
+
+  " 첫 번째 행을 탭을 사용하여 영문 필드명 추가
+  gs_ole = |FLDATE { lv_deli } PRICE { lv_deli } CURRENCY { lv_deli } PLANETYPE { lv_deli
+            } SEATSMAX { lv_deli } SEATSOCC { lv_deli } PAYMENTSUM { lv_deli
+            } SEATSMAX_B { lv_deli } SEATSOCC_B { lv_deli
+            } SEATSMAX_F { lv_deli } SEATSOCC_F |.
+
+  APPEND gs_ole TO gt_ole.
+  CLEAR gs_ole.
+
+  gs_ole = |항공편 일자 { lv_deli } 항공 요금 { lv_deli } 항공사 현지통화 { lv_deli } 항공기 유형 { lv_deli
+            } 일반석 최대 정원 { lv_deli } 일반석 예약좌석 { lv_deli } 예약 총계 { lv_deli
+            } 비즈니스석 최대정원 { lv_deli } 비즈니스 예약좌석 { lv_deli
+            } 일등석 최대정원 { lv_deli } 일등석 예약좌석 |.
+
+  APPEND gs_ole TO gt_ole.
+  CLEAR gs_ole.
+
+  gs_ole = |{ sy-datum } { lv_deli } 1000 { lv_deli } USD { lv_deli } 747-400 { lv_deli
+            } 385 { lv_deli } 100000000 { lv_deli } 31 { lv_deli
+            } 31 { lv_deli } 29 { lv_deli
+            } 21 { lv_deli } 20 |.
+
+  " 세개의 행을 추가
+  APPEND gs_ole TO gt_ole.
+
+  CLEAR gs_ole.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_ole_range
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LV_WORK
+*&---------------------------------------------------------------------*
+FORM set_ole_range  USING    pv_work.
+  DATA: borders  TYPE ole2_object,
+        range    TYPE ole2_object,
+        interior TYPE ole2_object.
+
+  DATA : lv_row  TYPE i,
+         lv_row1 TYPE string,
+         lv_row2 TYPE string.
+
+  " 최소 20개의 Row를 가지도록
+  DO 20 TIMES.
+
+    lv_row = sy-index. " 현재 루프에서 처리중인 행 번호
+    lv_row1 = |A{ sy-index }|. "A열의 Index
+    lv_row2 = |K{ sy-index }|. "K열의 Index
+
+
+    CALL METHOD OF pv_work 'Range' = range
+      EXPORTING
+      #1 = lv_row1
+      #2 = lv_row2.
+
+    " 왼쪽 테두리 "
+    CALL METHOD OF range 'Borders' = borders
+     EXPORTING #1  = 7. "7 for left side
+    SET PROPERTY OF borders 'LineStyle' = 1. " 라인 타입 "
+
+    " 오른쪽 테두리 "
+    CALL METHOD OF range 'Borders' = borders
+       EXPORTING #1  = 8.
+    SET PROPERTY OF borders 'LineStyle' = 1.
+
+    " 위쪽 테두리 "
+    CALL METHOD OF range 'Borders' = borders
+       EXPORTING #1  = 9.
+    SET PROPERTY OF borders 'LineStyle' = 1.
+
+    " 아래쪽 테두리 "
+    CALL METHOD OF range 'Borders' = borders
+       EXPORTING #1  = 10.
+    SET PROPERTY OF borders 'LineStyle' = 1.
+
+    " 가운데 내부 테두리 "
+    CALL METHOD OF range 'Borders' = borders
+       EXPORTING #1  = 11.
+    SET PROPERTY OF borders 'LineStyle' = 1.
+
+    IF sy-index < 3.
+
+      CALL METHOD OF range 'INTERIOR' = interior.
+      SET PROPERTY OF interior 'COLORINDEX' = 20.  " Excel의 색상 코드
+
+    ENDIF.
+
+  ENDDO.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_ole_cells
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> P_
+*&      --> LV_WORK
+*&---------------------------------------------------------------------*
+FORM set_ole_cells  USING    pv_index
+                             pv_work.
+
+  DATA : lv_cell TYPE ole2_object,
+         lv_font TYPE ole2_object.
+
+  DO 11 TIMES.
+
+    CALL METHOD OF pv_work 'CELLS' = lv_cell
+      EXPORTING
+        #1 = pv_index
+        #2 = sy-index.
+
+    SET PROPERTY OF lv_cell 'HorizontalAlignment' = 3. "가운데 정렬
+
+    CALL METHOD OF lv_cell 'Font' = lv_font.
+    SET PROPERTY OF lv_font 'SIZE' = 10.
+    SET PROPERTY OF lv_font 'Bold' = 1.
+
+  ENDDO.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALL_SCREEN
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM call_screen .
+
+  IF gt_data IS NOT INITIAL.
+    MESSAGE s016(pn) WITH |Total COUNT : { lines( gt_data ) }|.
+    CALL SCREEN 0100.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form UPLOAD_DATA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM upload_data .
+
+  DATA : lt_intern TYPE TABLE OF alsmex_tabline,
+         lv_check  TYPE c,
+         lv_value  TYPE string,
+         lv_row    TYPE i,
+         lv_line   TYPE i,
+         lv_exline TYPE i,
+
+         lv_ext    TYPE c LENGTH 5,
+         lv_price  TYPE bapicurr-bapicurr.
+
+  FIELD-SYMBOLS <fs>.
+
+  CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+    EXPORTING
+      filename                = p_file
+      i_begin_col             = 1 " Excel에서 읽을 범위
+      i_begin_row             = 1
+      i_end_col               = 1000
+      i_end_row               = 1000
+    TABLES
+      intern                  = lt_intern " Excel 파일을 읽어 lt_intern 테이블에 저장
+    EXCEPTIONS
+      inconsistent_parameters = 1
+      upload_ole              = 2
+      OTHERS                  = 3.
+
+  IF sy-subrc = 0.
+
+    CASE lt_intern[ 1 ]-value.
+      WHEN 'FLDATE'.
+        lv_row = 3.
+      WHEN '항공편 일자'.
+        lv_row = 2.
+      WHEN OTHERS.
+        lv_row = 1.
+    ENDCASE.
+
+    "Excel Data를 GT_EXCEL에 하나씩 넣어줌
+    LOOP AT lt_intern INTO DATA(ls_intern) WHERE row >= lv_row.
+      CONDENSE ls_intern-value NO-GAPS. " 공백 제거
+      ASSIGN COMPONENT ls_intern-col OF STRUCTURE gs_excel TO <fs>.
+      <fs> = ls_intern-value.
+      AT END OF row.
+        APPEND gs_excel TO gt_excel.
+        CLEAR : gs_excel, lv_line.
+      ENDAT.
+    ENDLOOP.
+
+    "데이터 가공
+    IF gt_excel IS NOT INITIAL.
+      SELECT *
+        FROM scurx
+        INTO TABLE @DATA(lt_scurx).
+
+      SELECT *
+        FROM saplane
+        INTO TABLE @DATA(lt_plane).
+
+      LOOP AT gt_excel INTO gs_excel.
+
+        MOVE-CORRESPONDING gs_excel TO gs_data.
+
+        gs_data-carrid = p_carrid.
+        gs_data-connid = p_connid.
+
+        IF gv_cname IS NOT INITIAL.
+
+          gs_data-carrname = gv_cname.
+
+          gs_data-upload_sts = '2'.
+          gs_data-seat_sts = '@5D@'.
+
+          "Carrid, Connid 값 점검
+          IF gs_spfli IS NOT INITIAL.
+            gs_data = CORRESPONDING #( BASE ( gs_data ) gs_spfli ).
+          ELSE.
+            gs_data-upload_sts = '1'.
+            gs_data-upload_msg = '존재하지 않는 항공사 연결번호입니다'.
+          ENDIF.
+
+        ELSE.
+          gs_data-upload_sts = '1'.
+          gs_data-upload_msg = '존재하지 않는 항공사 코드입니다'.
+        ENDIF.
+
+        IF gs_data-fldate IS INITIAL.
+          gs_data-upload_sts = '1'.
+          gs_data-upload_msg = '날짜 데이터를 입력하세요'.
+
+        ELSE.
+
+          "일자 타당성 점검
+          CALL FUNCTION 'DATE_CHECK_PLAUSIBILITY'
+            EXPORTING
+              date                      = gs_data-fldate
+            EXCEPTIONS
+              plausibility_check_failed = 1
+              OTHERS                    = 2.
+
+          IF sy-subrc <> 0.
+            gs_data-upload_sts = '1'.
+            gs_data-upload_msg = '잘못된 날짜 형식입니다'.
+          ENDIF.
+
+        ENDIF.
+
+        READ TABLE lt_scurx INTO DATA(ls_scurx) WITH KEY currkey = gs_data-currency.
+        IF sy-subrc <> 0.
+          gs_data-upload_sts = '1'.
+          gs_data-upload_msg = '존재하지 않는 통화입니다'.
+        ELSE.
+
+          lv_price = gs_data-paymentsum.
+
+          CALL FUNCTION 'BAPI_CURRENCY_CONV_TO_INTERNAL'
+            EXPORTING
+              currency             = gs_data-currency
+              amount_external      = lv_price
+              max_number_of_digits = 15
+            IMPORTING
+              amount_internal      = lv_price.
+
+          IF sy-subrc = 0.
+            gs_data-paymentsum = lv_price.
+          ENDIF.
+
+        ENDIF.
+
+        READ TABLE lt_plane INTO DATA(ls_plane) WITH KEY planetype = gs_data-planetype.
+
+        IF sy-subrc <> 0.
+
+          gs_data-upload_sts = '1'.
+          gs_data-upload_msg = '존재하지 않는 항공 유형입니다'.
+
+        ELSE.
+          gs_data = CORRESPONDING #( BASE ( gs_data ) ls_plane ).
+        ENDIF.
+
+        IF gs_data-seatsmax < gs_data-seatsocc OR
+            gs_data-seatsmax_b < gs_data-seatsocc_b OR
+            gs_data-seatsmax_f < gs_data-seatsocc_f.
+
+          gs_data-seat_sts = '@5C@'.
+          gs_data-seat_msg = '예약좌석이 최대좌석보다 큽니다'.
+
+        ENDIF.
+
+        IF gs_data-seatsocc < 0 OR
+            gs_data-seatsocc_b < 0 OR
+            gs_data-seatsocc_f < 0.
+
+          gs_data-seat_sts = '@5C@'.
+          gs_data-seat_msg = '예약좌석은 음수값이 들어갈 수 없습니다'.
+
+        ENDIF.
+
+        gs_data-line = lines( gt_data ) + 1.
+
+        APPEND gs_data TO gt_data.
+        CLEAR gs_data.
+
+      ENDLOOP.
+
+    ELSE.
+
+      MESSAGE s016(pn) WITH 'Excel내 데이터가 없습니다'.
+
+    ENDIF.
+
+  ELSE.
+
+    MESSAGE s016(pn) WITH TEXT-t02 DISPLAY LIKE 'E'.
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form remove_toolbar
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> CL_GUI_ALV_GRID=>MC_FC_LOC_UND
+*&---------------------------------------------------------------------*
+FORM remove_toolbar  USING pv_toolbar.
+  gs_exclude = pv_toolbar.
+  APPEND gs_exclude TO gt_exclude.
+  CLEAR gs_exclude.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_field_catalog
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&---------------------------------------------------------------------*
+FORM set_field_catalog  USING pv_field pv_text pv_table pv_ref_field pv_edit.
+
+  gs_fcat-fieldname = pv_field.
+  gs_fcat-ref_table = pv_table.
+  gs_fcat-ref_field = pv_ref_field.
+  gs_fcat-coltext = pv_text.
+  gs_fcat-edit = pv_edit.
+
+  gs_fcat-outputlen = 5.
+  gs_fcat-emphasize = ' '.
+
+  CASE gs_fcat-fieldname.
+    WHEN 'CARRID' OR 'CONNID' OR 'FLDATE'.
+      gs_fcat-hotspot = 'X'.
+    WHEN 'PAYMENTSUM'.
+      gs_fcat-cfieldname = 'CURRENCY'.
+      gs_fcat-do_sum = 'X'.
+    WHEN 'PRICE'.
+      gs_fcat-cfieldname = 'CURRENCY'.
+*    WHEN 'CURRDEC'.
+*      gs_fcat-no_out = 'X'.
+  ENDCASE.
+
+  APPEND gs_fcat TO gt_fcat.
+  CLEAR gs_fcat.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form count_line
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM count_line .
+  DATA : lv_coun TYPE i.
+
+  lv_coun = lines( gt_data ).
+
+  MESSAGE i016(pn) WITH 'Count :' lv_coun.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form insert_line
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM insert_line .
+
+  CLEAR gs_data.
+
+  " 순번 빼고 edit 가능
+  PERFORM set_field_edit USING :
+        'CARRID', 'CONNID','FLDATE', 'PRICE', 'CURRENCY', 'CURRDEC', 'PLANETYPE', 'SEATSOCC', 'PAYMENTSUM', 'SEATSOCC_B', 'SEATSOCC_F'.
+
+  gs_data-upload_sts = '2'.
+
+  gs_data-line = lines( gt_data ) + 1.
+
+  APPEND gs_data TO gt_data.
+
+  PERFORM refresh_grid.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form delete_line
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM delete_line .
+
+  " ALV에서 선택한 행 가져오기
+  CALL METHOD go_alv->get_selected_rows
+    IMPORTING
+      et_row_no = gt_roid.
+
+  " gt_roid가 있다면, 사용자가 ALV 행을 선택했다면
+  IF gt_roid IS NOT INITIAL.
+
+    " row_id = 0인 행, 즉 합계(Total 행을 의미)
+    READ TABLE gt_roid INTO gs_roid WITH KEY row_id = 0.
+
+    IF sy-subrc <> 0.
+      SORT gt_roid BY row_id DESCENDING.
+      LOOP AT gt_roid INTO gs_roid.
+        DELETE gt_data INDEX gs_roid-row_id. " 인덱스 번호가 변경되지 않도록 뒤에서부터 삭제
+      ENDLOOP.
+      LOOP AT gt_data INTO gs_data.
+        gs_data-line = sy-tabix.
+        MODIFY gt_data FROM gs_data.
+      ENDLOOP.
+
+      PERFORM refresh_grid. " Refresh
+
+    ELSE.
+      MESSAGE s016(pn) WITH '합계는 삭제할 수 없습니다 다시 선택해주세요' DISPLAY LIKE 'E'.
+    ENDIF.
+  ELSE.
+    MESSAGE s016(pn) WITH TEXT-t05 DISPLAY LIKE 'E'.
+  ENDIF.
+
+  CLEAR : gt_roid, gs_roid.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form copy_line
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM copy_line .
+  CLEAR gs_data.
+
+  CALL METHOD go_alv->get_selected_rows
+    IMPORTING
+      et_row_no = gt_roid.
+
+  IF lines( gt_roid ) >= 2.
+    MESSAGE s016(pn) WITH '두줄 이상 고를 수 없습니다' DISPLAY LIKE 'E'.
+    EXIT.
+  ENDIF.
+
+  " row_id = 0인 행, 즉 합계(Total 행을 의미)
+  READ TABLE gt_roid INTO gs_roid WITH KEY row_id = 0.
+  IF sy-subrc = 0.
+    MESSAGE s016(pn) WITH '합계 부분은 복사할 수 없습니다' DISPLAY LIKE 'E'.
+    EXIT.
+  ENDIF.
+
+  IF gt_roid IS NOT INITIAL.
+
+    READ TABLE gt_data INTO gs_data INDEX gt_roid[ 1 ]-row_id.
+    gs_data-line = lines( gt_data ) + 1.
+    APPEND gs_data TO gt_data.
+
+    PERFORM refresh_grid.
+
+  ELSE.
+
+    MESSAGE s016(pn) WITH TEXT-t05 DISPLAY LIKE 'E'.
+
+  ENDIF.
+ENDFORM.
+
+FORM handler_hotspot_click  USING ps_row_no TYPE lvc_s_roid.
+
+  READ TABLE gt_data INTO gs_data INDEX ps_row_no-row_id.
+
+  IF gs_data-carrid IS NOT INITIAL AND
+     gs_data-connid IS NOT INITIAL AND
+     gs_data-fldate IS NOT INITIAL.
+
+    " 핫스팟
+    SUBMIT zflight_booking_alv
+      WITH pa_car = gs_data-carrid
+      WITH pa_con = gs_data-connid
+      WITH pa_fld = gs_data-fldate
+    AND RETURN.
+
+  ELSE.
+    MESSAGE s016(pn) WITH '필수 필드값이 존재하지 않습니다'.
+  ENDIF.
+
+ENDFORM.
+
+FORM handle_toolbar  USING pt_toolbar TYPE ttb_button.
+
+  DATA : ls_button TYPE stb_button.
+
+  ls_button-butn_type = 3.
+  APPEND ls_button TO pt_toolbar.
+  CLEAR ls_button.
+
+  ls_button-butn_type = 0.
+  ls_button-text = |Total Count : { lines( gt_data ) }|.
+  ls_button-function = 'COUN'.
+  APPEND ls_button TO pt_toolbar.
+  CLEAR ls_button.
+
+  ls_button-butn_type = 0.
+  ls_button-text = '행추가'.
+  ls_button-icon = '@17@'.
+  ls_button-function = 'INSE'.
+  APPEND ls_button TO pt_toolbar.
+  CLEAR ls_button.
+
+  ls_button-butn_type = 0.
+  ls_button-text = '행삭제'.
+  ls_button-icon = '@18@'.
+  ls_button-function = 'DELE'.
+  APPEND ls_button TO pt_toolbar.
+  CLEAR ls_button.
+
+  ls_button-butn_type = 3.
+  APPEND ls_button TO pt_toolbar.
+  CLEAR ls_button.
+
+  ls_button-butn_type = 0.
+  ls_button-text = '행 복사'.
+  ls_button-icon = '@4O@'.
+  ls_button-function = 'COPY'.
+  APPEND ls_button TO pt_toolbar.
+  CLEAR ls_button.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form handle_changed_data
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ET_GOOD_CELLS
+*&---------------------------------------------------------------------*
+FORM handle_changed_data  USING pt_good_cells TYPE lvc_t_modi.
+
+  READ TABLE gt_data INTO gs_data INDEX pt_good_cells[ 1 ]-row_id.
+
+  LOOP AT pt_good_cells INTO DATA(ps_good_cells).
+    CASE ps_good_cells-fieldname.
+      WHEN 'CARRID'.
+
+        PERFORM get_CARRnm USING gs_data-carrid.
+
+        CHECK gv_cname IS NOT INITIAL.
+        gs_data-carrname = gv_cname.
+
+        MODIFY gt_data FROM gs_data INDEX ps_good_cells-row_id
+        TRANSPORTING carrid carrname.
+
+      WHEN 'CONNID'.
+
+        PERFORM check_conn USING gs_data-carrid gs_data-connid.
+
+        CHECK gs_spfli IS NOT INITIAL.
+        MOVE-CORRESPONDING gs_spfli TO gs_data.
+
+        MODIFY gt_data FROM gs_data INDEX ps_good_cells-row_id
+        TRANSPORTING carrid connid cityfrom countryfr airpfrom
+                     cityto countryto airpto.
+
+      WHEN 'PLANETYPE'.
+
+        SELECT SINGLE seatsmax seatsmax_b seatsmax_f
+          FROM saplane
+          INTO CORRESPONDING FIELDS OF gs_data
+          WHERE planetype = gs_data-planetype.
+
+        IF sy-subrc = 0.
+          MODIFY gt_data FROM gs_data INDEX pt_good_cells[ 1 ]-row_id TRANSPORTING seatsmax seatsmax_b seatsmax_f.
+        ELSE.
+          MESSAGE s016(pn) WITH '해당 항공기 유형 정보가 없습니다' DISPLAY LIKE 'E'.
+        ENDIF.
+
+      WHEN 'SEATSOCC' OR 'SEATSOCC_B' OR 'SEATSOCC_F'.
+
+        IF gs_data-seatsmax < gs_data-seatsocc OR
+          gs_data-seatsmax_f < gs_data-seatsocc_f OR
+          gs_data-seatsmax_b < gs_data-seatsocc_b.
+
+
+          DATA(lv_mes) = COND #( WHEN pt_good_cells[ 1 ]-fieldname = 'SEATSOCC'   THEN '일반석'
+                                 WHEN pt_good_cells[ 1 ]-fieldname = 'SEATSOCC_B' THEN '비즈니스'
+                                 WHEN pt_good_cells[ 1 ]-fieldname = 'SEATSOCC_F' THEN '일등석' ).
+
+
+          gs_data-seat_sts = '@5C@'.
+          gs_data-seat_msg = | 해당 항공기의 최대 { lv_mes } 좌석 수 보다 큰 좌석 수를 입력할 수 없습니다 |.
+
+          MESSAGE s016(pn) WITH gs_data-seat_msg DISPLAY LIKE 'E'.
+
+        ELSE.
+
+          IF gs_data-seatsocc >= 0 OR
+              gs_data-seatsocc_b >= 0 OR
+              gs_data-seatsocc_f >= 0.
+
+            gs_data-seat_sts = '@5B@'.
+            CLEAR : gs_data-seat_msg.
+
+          ENDIF.
+
+        ENDIF.
+
+        MODIFY gt_data FROM gs_data INDEX pt_good_cells[ 1 ]-row_id TRANSPORTING seat_sts seat_msg.
+
+    ENDCASE.
+
+  ENDLOOP.
+
+  PERFORM refresh_grid.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form set_field_edit
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> P_
+*&---------------------------------------------------------------------*
+FORM set_field_edit  USING pv_field.
+
+  gs_cell-fieldname = pv_field.
+  gs_cell-style = cl_gui_alv_grid=>mc_style_enabled.
+  IF pv_field = 'CARRID' OR pv_field = 'CONNID' OR pv_field = 'FLDATE'.
+    gs_cell-style = gs_cell-style + cl_gui_alv_grid=>mc_style_hotspot_no.
+    gs_cell-style = gs_cell-style + cl_gui_alv_grid=>mc_style_f4.
+  ENDIF.
+
+  INSERT gs_cell INTO TABLE gs_data-cellstyle.
+  CLEAR gs_cell.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CHECK_CONN
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM check_conn USING pv_carrid pv_connid.
+
+*  DATA: lv_connid TYPE scarr-carrid.
+*
+*  SELECT SINGLE connid
+*     FROM sflight
+*     INTO lv_connid
+*     WHERE carrid = p_carrid
+*     AND connid = p_connid.
+*
+*  IF sy-subrc EQ 0.
+*    MESSAGE s016(pn) WITH '등록되지 않은 항공사 연결번호입니다.' DISPLAY LIKE 'E'.
+*    LEAVE LIST-PROCESSING.
+*    CLEAR: gv_cname, p_carrid, p_connid.
+*  ENDIF.
+
+  SELECT SINGLE *
+    FROM spfli
+    INTO CORRESPONDING FIELDS OF gs_spfli
+    WHERE carrid = pv_carrid
+    AND connid = pv_connid.
+
+  IF sy-subrc <> 0.
+    MESSAGE s016(pn) WITH '연결번호 정보가 존재하지 않습니다' DISPLAY LIKE 'E'.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form F4_carrid
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM F4_carrid .
+
+  DATA: lt_return TYPE TABLE OF ddshretval,
+        ls_return LIKE LINE OF lt_return.
+
+  TYPES: BEGIN OF f4_sh,
+           carrid   TYPE scarr-carrid,
+           carrname TYPE scarr-carrname,
+         END OF f4_sh.
+
+  DATA: it_sh TYPE STANDARD TABLE OF f4_sh.
+
+  SELECT carrid carrname INTO TABLE it_sh FROM scarr.
+
+  CALL FUNCTION 'F4IF_INT_TABLE_VALUE_REQUEST'
+    EXPORTING
+      retfield        = 'CARRID'
+      dynpprog        = sy-repid
+      dynpnr          = sy-dynnr
+      dynprofield     = 'P_CARRID'
+      value_org       = 'S'
+    TABLES
+      value_tab       = it_sh
+      return_tab      = lt_return[]
+    EXCEPTIONS
+      parameter_error = 1
+      no_values_found = 2
+      OTHERS          = 3.
+
+  READ TABLE lt_return INTO ls_return INDEX 1.
+  IF sy-subrc = 0.
+    p_carrid = ls_return-fieldval.
+    SELECT SINGLE carrname INTO gv_cname
+      FROM scarr
+      WHERE carrid = p_carrid.
+  ENDIF.
+
+  CALL FUNCTION 'SAPGUI_SET_FUNCTIONCODE'
+    EXPORTING
+      functioncode           = 'ENTE'
+    EXCEPTIONS
+      function_not_supported = 1
+      OTHERS                 = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SAVE_SFLIGHT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> GS_DATA
+*&---------------------------------------------------------------------*
+FORM save_data .
+
+  CLEAR : gs_roid, gt_roid, gs_data.
+
+  DATA : lv_answer, lv_check.
+
+  DATA : lt_sflight TYPE TABLE OF sflight,
+         ls_sflight TYPE sflight.
+
+  CALL METHOD go_alv->get_selected_rows
+    IMPORTING
+      et_row_no = gt_roid.
+
+  IF gt_roid IS INITIAL.
+    MESSAGE s016(pn) WITH TEXT-t05 DISPLAY LIKE 'E'.
+  ELSE.
+    SORT gt_roid BY row_id.
+  ENDIF.
+
+  LOOP AT gt_roid INTO gs_roid.
+
+    IF gs_roid-row_id = 0.
+
+      MESSAGE e016(pn) WITH '합계 부분은 저장할 수 없습니다'.
+
+    ENDIF.
+
+    READ TABLE gt_data INTO gs_data INDEX gs_roid-row_id.
+
+    IF gs_data-upload_sts = '1'.
+      MESSAGE e016(pn) WITH '유효하지 않은 라인은 저장할 수 없습니다'.
+    ELSEIF gs_data-upload_sts = '3'.
+      MESSAGE e016(pn) WITH '이미 지정한 라인은 저장할 수 없습니다'.
+    ELSE.
+
+      lv_check = 'X'.
+
+      MOVE-CORRESPONDING gs_data TO ls_sflight.
+      ls_sflight-mandt = sy-mandt.
+
+      gs_data-upload_sts = '3'.
+      gs_data-upload_msg = TEXT-t06.
+
+      CLEAR gs_data-cellstyle.
+      PERFORM set_field_edit_disabled USING : 'SEATSOCC', 'SEATSOCC_B', 'SEATSOCC_F'.
+
+      MODIFY gt_data FROM gs_data INDEX gs_roid-row_id TRANSPORTING upload_sts upload_msg cellstyle.
+
+      APPEND ls_sflight TO lt_sflight.
+      CLEAR ls_sflight.
+
+    ENDIF.
+
+  ENDLOOP.
+
+  IF lv_check IS NOT INITIAL.
+
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        titlebar              = '저장'
+        text_question         = '저장하시겠습니까?'
+        text_button_1         = '예'
+        text_button_2         = '아니오'
+        display_cancel_button = ''
+      IMPORTING
+        answer                = lv_answer.
+
+    IF lv_answer = 1.
+
+      IF lt_sflight[ 1 ]-carrid IS NOT INITIAL AND lt_sflight[ 1 ]-connid IS NOT INITIAL.
+        MODIFY sflight FROM TABLE lt_sflight.
+
+        IF sy-subrc = 0.
+          MESSAGE s016(pn) WITH '성공'.
+          COMMIT WORK AND WAIT .
+        ELSE.
+          MESSAGE s016(pn) WITH '실패' DISPLAY LIKE 'E'.
+          ROLLBACK WORK.
+        ENDIF.
+
+        PERFORM refresh_grid.
+        CLEAR lt_sflight.
+      ELSE.
+        MESSAGE s016(pn) WITH '필수 값을 입력해주세요' DISPLAY LIKE 'E'.
+
+        LOOP AT gt_roid INTO gs_roid.
+          gt_data[ gs_roid-row_id ]-upload_sts = '2'.
+          CLEAR gt_data[ gs_roid-row_id ]-upload_msg.
+
+          " 필수 값 입력 안한 행 삭제
+          DELETE gt_data INDEX gs_roid-row_id.
+          gs_data-line = sy-tabix.
+          MODIFY gt_data FROM gs_data.
+        ENDLOOP.
+
+*        PERFORM set_field_edit USING :
+*                  'CARRID', 'CONNID','FLDATE', 'PRICE', 'CURRENCY', 'CURRDEC', 'PLANETYPE', 'SEATSOCC', 'PAYMENTSUM', 'SEATSOCC_B', 'SEATSOCC_F'.
+        " 필수 값 입력안한 행 삭제
+
+      ENDIF.
+    ENDIF.
+
+  ENDIF.
+
+  PERFORM refresh_grid.
+  CLEAR lt_sflight.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_FIELD_EDIT_DISABLED
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> P_
+*&---------------------------------------------------------------------*
+FORM set_field_edit_disabled  USING pv_field.
+
+  CLEAR gs_cell.
+
+  gs_cell-fieldname = pv_field.
+  gs_cell-style = cl_gui_alv_grid=>mc_style_disabled.
+
+  APPEND gs_cell TO gs_data-cellstyle.
+  CLEAR gs_cell.
+
+ENDFORM.

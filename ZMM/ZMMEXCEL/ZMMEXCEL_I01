@@ -1,0 +1,95 @@
+*&---------------------------------------------------------------------*
+*& Include          ZFLIGHT_EXC_UPDOWNLOAD2_I01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE user_command_0100 INPUT.
+
+*  DATA: lt_sflight TYPE TABLE OF sflight,
+*        ls_sflight TYPE sflight.
+
+  CASE ok_code.
+    WHEN 'BACK' OR 'EXIT' OR 'CANCEL'.
+      LEAVE TO SCREEN 0.
+    WHEN 'SAVE'.
+      PERFORM save_data.
+*      CLEAR: gt_roid.
+*      CALL METHOD go_alv->get_selected_rows
+*        IMPORTING
+*          et_row_no = gt_roid.
+*
+*      IF gt_roid IS NOT INITIAL.
+*
+*        DATA: lv_answer TYPE c.
+*
+*        READ TABLE gt_data INTO gs_data INDEX gt_roid[ 1 ]-row_id.
+**        APPEND gs_data TO gt_data.
+*        CASE gs_data-upload_sts.
+*          WHEN '1'.
+*            MESSAGE s016(pn) WITH '유효하지않은 라인은 저장할 수 없습니다.' DISPLAY LIKE 'E'.
+*          WHEN '3'.
+*            MESSAGE s016(pn) WITH '이미 지정한 라인은 저장할 수 없습니다.' DISPLAY LIKE 'E'.
+*          WHEN '2'.
+*            CALL FUNCTION 'POPUP_TO_CONFIRM'
+*              EXPORTING
+*                titlebar       = '저장 확인'
+*                text_question  = '저장하시겠습니까?'
+*                default_button = '1'
+*              IMPORTING
+*                answer         = lv_answer.
+*            IF lv_answer = '1'.
+*
+*              PERFORM set_field_edit_disabled USING : 'SEATSOCC', 'SEATSOCC_B', 'SEATSOCC_F'.
+*              PERFORM save_sflight USING gs_data.
+*
+*            ELSEIF lv_answer = '2'.
+*
+*              LOOP AT gt_roid INTO gs_roid.
+*
+*                gt_data[ gs_roid-row_id ]-upload_sts = '2'.
+*                CLEAR gt_data[ gs_roid-row_id ]-upload_msg.
+*
+*              ENDLOOP.
+*            ENDIF.
+*
+*        ENDCASE.
+*      ELSE.
+*        MESSAGE s016(pn) WITH '행을 선택해주세요' DISPLAY LIKE 'S'.
+*      ENDIF.
+
+  ENDCASE.
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*& Form USER_FUCN
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM user_fucn .
+  DATA : lv_file TYPE string.
+  " Function Key 눌렀을 경우
+  CASE sscrfields-ucomm.
+    WHEN 'FC01'.
+      lv_file = 'EXCEL FILES (*.XLSX)|*.XLSX|EXCEL FILES (*.XLS)|*.XLS|'. " XLS, XLSX
+
+      PERFORM file_save_dialog USING TEXT-t03 lv_file.
+
+      IF gv_file IS NOT INITIAL.
+        PERFORM download_excel.
+      ENDIF.
+    WHEN 'FC02'.
+      lv_file = 'EXCEL FILES (*.XLSX)|*.XLSX|'. " Only XLSX
+      PERFORM file_save_dialog USING TEXT-t04 lv_file.
+
+      IF gv_file IS NOT INITIAL.
+        PERFORM download_smw0.
+      ENDIF.
+
+    WHEN OTHERS.
+  ENDCASE.
+ENDFORM.
