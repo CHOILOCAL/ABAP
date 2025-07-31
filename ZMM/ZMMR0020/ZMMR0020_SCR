@@ -1,0 +1,17 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0020_SCR
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-001.
+
+  SELECT-OPTIONS : S_WERKS FOR MARC-WERKS. "플랜트
+  SELECT-OPTIONS : S_LGORT FOR MARD-LGORT. " 저장위치
+  SELECT-OPTIONS : S_MATNR FOR MARC-MATNR. " 자재코드
+  SELECT-OPTIONS : S_BKLAS FOR MBEW-BKLAS. " 평가클래스
+  SELECT-OPTIONS: S_MTART FOR T134T-MTART. " 자재유형
+  SELECT-OPTIONS : S_DATE FOR MATDOC-BUDAT OBLIGATORY. " 조회 기간
+
+  SELECTION-SCREEN SKIP 1.
+
+  PARAMETERS: P_ZERO AS CHECKBOX.
+
+SELECTION-SCREEN END OF BLOCK B1.

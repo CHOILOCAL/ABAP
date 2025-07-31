@@ -1,0 +1,934 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0020_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form GET_DATA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM GET_DATA .
+
+  PERFORM INIT_SELOPT.
+
+  SELECT
+    A~WERKS, " 플랜트
+    TW~NAME1, " 플랜트명
+    MT~LGORT, " 저장위치
+    TL~LGOBE, " 저장위치명
+    A~MATNR, " 자재코드
+    C~MAKTX, " 자재코드명
+    E~MTART, " 자재 유형
+    E~MTBEZ, " 자재 유형 내역
+    F~BKLAS, " 평가클래스
+    TT~BKBEZ, " 평가클래스명
+    MT~WAERS, " 통화
+    MT~MEINS, " 단위
+    MT~SHKZG, " 차대변 지시자
+    A~LABST AS CURST, " 현 재고 수량
+    F~SALK3 AS CURST_AMOUNT " 현 재고 금액
+    FROM MARD AS A
+    LEFT OUTER JOIN T001W AS TW ON TW~WERKS = A~WERKS
+    LEFT OUTER JOIN T001L AS TL ON TL~LGOBE = A~LGORT
+    LEFT OUTER JOIN ZMMT0040 AS ZMM ON A~WERKS = ZMM~WERKS AND ZMM~DELFLG <> @GC_X
+    LEFT OUTER JOIN MARC AS B ON A~WERKS = B~WERKS
+    LEFT OUTER JOIN MATDOC AS MT ON A~WERKS = MT~WERKS AND MT~BWART = ZMM~BWART AND MT~SHKZG = ZMM~SHKZG
+    LEFT OUTER JOIN MAKT AS C ON C~MATNR = A~MATNR
+    LEFT OUTER JOIN MARA AS D ON D~MATNR = A~MATNR
+    LEFT OUTER JOIN T134T AS E ON E~MTART = D~MTART
+    LEFT OUTER JOIN MBEW AS F ON F~MATNR = A~MATNR
+    LEFT OUTER JOIN T025T AS TT ON TT~BKLAS = F~BKLAS
+    WHERE A~LGORT IN @S_LGORT
+    AND A~WERKS IN @S_WERKS
+    AND A~MATNR IN @S_MATNR
+    AND MT~BUDAT IN @S_DATE
+    AND E~MTART IN @S_MTART
+    AND E~SPRAS = @SY-LANGU
+    AND TT~SPRAS = @SY-LANGU
+*    AND ( @P_ZERO <> @GC_X AND A~LABST <> 0 )
+    INTO CORRESPONDING FIELDS OF TABLE @GT_DATA.
+
+  IF SY-SUBRC EQ 0.
+
+    SORT GT_DATA BY WERKS LGORT MATNR.
+
+    DELETE ADJACENT DUPLICATES FROM GT_DATA COMPARING WERKS LGORT MATNR.
+
+*--- 기초 수량 계산
+    PERFORM CALC_OPEST.
+*--- 입/출고, 기초/기말 수량 계산 (기초 수량을 통해)
+    PERFORM CALC_GRGI.
+*--- 평가 금액 계산
+    PERFORM CALC_UNIT_PRICE.
+*--- 현 재고 수량/금액 계산
+    PERFORM CALC_CURST.
+*--- 입/출고, 기초/기말 재고  금액 계산
+    PERFORM CALC_AMOUNT.
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALL_SCREEN
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALL_SCREEN .
+
+  IF P_ZERO EQ GC_X.
+* 현 재고 수량(CURST)이 0인 행 제거
+    DELETE GT_DATA WHERE CURST = 0.
+  ENDIF.
+
+  DATA: LV_LINE  TYPE I.
+
+  LV_LINE = LINES( GT_DATA ).
+
+  IF LV_LINE > 0.
+    MESSAGE S003(ZMM01) WITH LV_LINE.
+    CALL SCREEN 0100.
+  ELSE.
+    MESSAGE S002(ZMM01) DISPLAY LIKE 'E'.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form REFRESH_GRID
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM REFRESH_GRID .
+
+  CALL METHOD GO_GRID->REFRESH_TABLE_DISPLAY.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_GRID
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_GRID .
+
+  CREATE OBJECT GO_DOCK
+    EXPORTING
+      REPID     = SY-REPID
+      DYNNR     = SY-DYNNR
+      EXTENSION = 5000.
+
+  CREATE OBJECT GO_GRID
+    EXPORTING
+      I_PARENT = GO_DOCK.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_FCAT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_FUNC .
+
+  "------------------------------------------------------------------
+  " 1. 사용할 버튼은 주석처리
+  "------------------------------------------------------------------
+*  PERFORM exclude USING 'MC_FC_SORT_ASC'          CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_SORT_DSC'          CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_FIND'              CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_FIND_MORE'         CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_MB_FILTER'            CHANGING gt_exclude01.
+*  PERFORM EXCLUDE USING 'MC_MB_SUM'               CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_MB_SUBTOT'            CHANGING GT_EXCLUDE.
+*  PERFORM exclude USING 'MC_MB_EXPORT'            CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_MB_VARIANT'           CHANGING gt_exclude01.
+
+
+  "------------------------------------------------------------------
+  " 2. 사용하지 않을 버튼만 입력
+  "------------------------------------------------------------------
+
+  " 메뉴 버튼 제외
+*  PERFORM EXCLUDE USING 'MC_MB_VIEW'              CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_MB_PASTE'             CHANGING GT_EXCLUDE.
+
+  " 메뉴 버튼외 버튼들 제외
+*  PERFORM EXCLUDE USING 'MC_FC_HELP'              CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_INFO'              CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_VIEWS'             CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_GRAPH'             CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_PRINT'             CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_DETAIL'            CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_REFRESH'           CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_CUT'           CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_UNDO'          CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_COPY'          CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_PASTE'         CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_COPY_ROW'      CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_MOVE_ROW'      CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_DELETE_ROW'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_INSERT_ROW'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_APPEND_ROW'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_WORD_PROCESSOR'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_PASTE_NEW_ROW' CHANGING GT_EXC.
+
+  "------------------------------------------------------------------
+  " 전체 제외 할 경우는 주석제외 후 활성화
+  "------------------------------------------------------------------
+*  PERFORM exclude USING 'MC_FC_EXCL_ALL'          CHANGING gt_exclude01.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_LAYO
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_LAYO .
+
+  CLEAR GS_LAYO.
+
+  GS_LAYO-SEL_MODE = ''.
+  GS_LAYO-ZEBRA = GC_X.
+  GS_LAYO-INFO_FNAME = ''.
+  GS_LAYO-STYLEFNAME = ''.
+  GS_LAYO-NO_ROWINS = ABAP_TRUE.
+
+  CLEAR: GS_VARIANT.
+  GS_VARIANT-REPORT = SY-REPID.
+  GS_VARIANT-HANDLE = SY-DYNNR.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_FUNC
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_FCAT .
+
+  PERFORM SET_FIELDCATALOG USING GT_FCAT:
+    "FIELDNAME"       "COLTEXT"           "REF_TABLE      "REF_FIELD     "KEY     "EDIT     "NO_OUT     " OUTPUTLEN     "DO_SUM     "HOTSPOT    "NO_ZERO      "JUST
+    'WERKS'                '플랜트'         'MATDOC'      'WERKS'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'NAME1'                '플랜트명'           'T001W'         'NAME1'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'LGORT'          '저장위치'           'MATDOC'         'LGORT'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'LGOBE'                '저장위치명'           'T001L'         'LGOBE'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'MATNR'                '자재코드'            'MATDOC'         'MATNR'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'MAKTX'                 '자재 코드명'             'MARA'         'MAKTX'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+     'MTART'                '자재 유형'             'MARA'         'MTART'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'MTBEZ'                 '자재 유형 내역'             'T134T'         'MTBEX'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'BKLAS'                 '평가클래스'             'MBEW'         'BKLAS'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'BKBEZ'                 '평가클래스명'             'BKBEZ'         'BKBEZ'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'OPEST'                 '기초 재고'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'Cs',
+    'OPEST_AMOUNT'       '기초 재고 금액'             'MBEWH'         'SALK3'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'GRQTY'                      '입고 수량'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'GRQTY_AMOUNT'       '입고 재고 금액'             'MATDOC'         'DMBTR'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'ISQTY'                       '출고 수량'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'ISQTY_AMOUNT'       '출고 재고 금액 '             'MATDOC'         'DMBTR'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'CLOST'                     '기말 수량'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'CLOST_AMOUNT'       '기말 재고 금액'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'CURST'                      '현 재고 수량'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'CURST_AMOUNT'       '현 재고 금액'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+   " 'CURST_AMOUNT'       '현 재고 금액'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+   " 'CURST_AMOUNT'       '현 재고 금액'             'MATDOC'         'MENGE'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'STPRS'                        '단가'             'MBEW'         'STPRS'     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'MEINS'                         '단위'             ''         ''     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'WAERS'                       '통화'             ''         ''     ' '   ' '   ' '     '10'         ' '      ' '      ' '      'C'.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_ALV
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM DISPLAY_ALV .
+
+  SET HANDLER : LCL_HANDLER=>ON_DOUBLE_CLICK FOR GO_GRID.
+
+  SORT GT_DATA BY WERKS LGORT MATNR. " 오름차순 정렬
+
+  CALL METHOD GO_GRID->SET_TABLE_FOR_FIRST_DISPLAY
+    EXPORTING
+      IS_LAYOUT                     = GS_LAYO
+      IT_TOOLBAR_EXCLUDING          = GT_EXC
+      I_SAVE                        = GC_U
+      IS_VARIANT                    = GS_VARIANT
+    CHANGING
+      IT_OUTTAB                     = GT_DATA
+      IT_FIELDCATALOG               = GT_FCAT
+      IT_SORT                       = GT_SORT
+    EXCEPTIONS
+      INVALID_PARAMETER_COMBINATION = 1
+      PROGRAM_ERROR                 = 2
+      TOO_MANY_LINES                = 3
+      OTHERS                        = 4.
+
+  IF SY-SUBRC <> 0.
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+               WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_FIELDCATALOG
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&---------------------------------------------------------------------*
+FORM SET_FIELDCATALOG
+  USING PT_FCAT TYPE LVC_T_FCAT
+                             PV_FIELD
+                             PV_TEXT
+                             PV_REF_TABLE
+                             PV_REF_FIELD
+                             PV_KEY
+                             PV_EDIT
+                             PV_NO_OUT
+                             PV_LEN
+                             PV_SUM
+                             PV_HOT
+                             PV_NO_ZERO
+                             PV_JUST.
+
+  GS_FCAT-FIELDNAME = PV_FIELD.
+  GS_FCAT-COLTEXT = PV_TEXT.
+  GS_FCAT-REF_TABLE = PV_REF_TABLE.
+  GS_FCAT-REF_FIELD = PV_REF_FIELD.
+  GS_FCAT-KEY = PV_KEY.
+  GS_FCAT-EDIT = PV_EDIT.
+  GS_FCAT-NO_OUT = PV_NO_OUT.
+  GS_FCAT-OUTPUTLEN = PV_LEN.
+  GS_FCAT-DO_SUM = PV_SUM.
+  GS_FCAT-HOTSPOT = PV_HOT.
+  GS_FCAT-NO_ZERO = PV_NO_ZERO.
+  GS_FCAT-JUST = PV_JUST.
+  GS_FCAT-DECIMALS_O = 0.
+
+  CASE PV_FIELD.
+    WHEN 'OPEST' OR 'GRQTY' OR 'ISQTY' OR 'CLOST' OR 'CURST'. " 수량 필드
+      GS_FCAT-DATATYPE    = 'QUAN'.
+      GS_FCAT-QFIELDNAME = 'MEINS'.
+      GS_FCAT-DECIMALS_O = 0.
+      GS_FCAT-JUST = GC_R.
+
+    WHEN 'OPEST_AMOUNT' OR 'GRQTY_AMOUNT' OR 'ISQTY_AMOUNT' OR 'CLOST_AMOUNT' OR 'CURST_AMOUNT' OR 'STPRS'. " 금액 필드
+      GS_FCAT-DATATYPE    = 'CURR'.
+      GS_FCAT-CFIELDNAME = 'WAERS'.
+      GS_FCAT-DECIMALS_O = 0.
+      GS_FCAT-JUST = GC_R.
+
+    WHEN OTHERS.
+  ENDCASE.
+
+  APPEND GS_FCAT TO PT_FCAT.
+
+  CLEAR GS_FCAT.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form EXCLUDE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> P_
+*&      <-- GT_EXC
+*&---------------------------------------------------------------------*
+FORM EXCLUDE    USING PV_UINAME
+             CHANGING PT_EXCLUDE TYPE STANDARD TABLE.
+
+  DATA LV_TEXT      TYPE STRING.
+  DATA LV_CNAME(30) TYPE C VALUE 'CL_GUI_ALV_GRID'.
+
+  FIELD-SYMBOLS: <EXCLUDE> TYPE ANY.
+
+  CLEAR LV_TEXT.
+  UNASSIGN <EXCLUDE>.
+
+  CONCATENATE LV_CNAME '=>' PV_UINAME INTO LV_TEXT.
+  ASSIGN (LV_TEXT) TO <EXCLUDE>.
+
+  CHECK <EXCLUDE> IS ASSIGNED AND <EXCLUDE> <> ''.
+  APPEND <EXCLUDE> TO PT_EXCLUDE.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form INIT_SELOPT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM INIT_SELOPT .
+
+*----------------------------------------------------------------------*
+* S_DATE 조회 조건 처리: 시작일만 입력 시 해당 일자까지 조회
+*----------------------------------------------------------------------*
+  LOOP AT S_DATE ASSIGNING FIELD-SYMBOL(<FS_S_DATE>).
+    IF <FS_S_DATE>-OPTION = 'EQ' AND <FS_S_DATE>-HIGH IS INITIAL.
+      <FS_S_DATE>-OPTION = 'LE'.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_DEFAULT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_DEFAULT .
+
+  DATA: LV_PREV_DATE TYPE SY-DATUM.
+
+  IF GV_MONTH EQ '01'.
+**  " From일자의 이전월의 연도/월 (기초 재고 계산을 위함)
+    CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+      EXPORTING
+        DATE      = S_DATE-LOW
+        DAYS      = '00'
+        MONTHS    = '00'
+        SIGNUM    = '-'
+        YEARS     = '01'
+      IMPORTING
+        CALC_DATE = LV_PREV_DATE.
+
+    GV_YEAR_F = LV_PREV_DATE(4).
+    GV_MONTH_F = LV_PREV_DATE+4(2).
+
+  ELSE.
+
+    CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+      EXPORTING
+        DATE      = S_DATE-LOW
+        DAYS      = '00'
+        MONTHS    = '01'
+        SIGNUM    = '-'
+        YEARS     = '00'
+      IMPORTING
+        CALC_DATE = LV_PREV_DATE.
+
+    GV_YEAR_F = LV_PREV_DATE(4).
+    GV_MONTH_F = LV_PREV_DATE+4(2).
+
+    IF S_DATE-LOW+6(2) NE '01'.
+
+      CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+        EXPORTING
+          DATE      = S_DATE-LOW
+          DAYS      = '01'
+          MONTHS    = '00'
+          SIGNUM    = '-'
+          YEARS     = '00'
+        IMPORTING
+          CALC_DATE = LV_PREV_DATE.
+
+      GV_DD_B = LV_PREV_DATE+6(2).
+
+    ENDIF.
+
+  ENDIF.
+
+  IF GV_MONTH = '01'.
+**  " From일자의 이전월의 연도/월 (기초 재고 계산을 위함)
+    CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+      EXPORTING
+        DATE      = S_DATE-HIGH
+        DAYS      = '00'
+        MONTHS    = '00'
+        SIGNUM    = '-'
+        YEARS     = '01'
+      IMPORTING
+        CALC_DATE = LV_PREV_DATE.
+
+    GV_YEAR_T = LV_PREV_DATE(4).
+    GV_MONTH_T = LV_PREV_DATE+4(2).
+
+  ELSE.
+
+    CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+      EXPORTING
+        DATE      = S_DATE-HIGH
+        DAYS      = '00'
+        MONTHS    = '01'
+        SIGNUM    = '-'
+        YEARS     = '00'
+      IMPORTING
+        CALC_DATE = LV_PREV_DATE.
+
+    GV_YEAR_T = LV_PREV_DATE(4).
+    GV_MONTH_T = LV_PREV_DATE+4(2).
+
+  ENDIF.
+
+  APPEND S_DATE.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form HANDLER_DOUBLE_CLICK
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ES_ROW_NO
+*&      --> E_COLUMN
+*&---------------------------------------------------------------------*
+FORM HANDLER_DOUBLE_CLICK USING PS_ROW_NO TYPE LVC_S_ROID
+                                PS_COL     TYPE LVC_S_COL.
+
+  CALL SCREEN 0110 STARTING AT 10 1 ENDING AT 150 30.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALC_OPEST
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALC_OPEST .
+
+  DATA: LT_RESULT      TYPE STANDARD TABLE OF TY_MAR_A,
+        LS_RESULT_LINE TYPE TY_MAR_A.
+
+  " 기초 재고 ( 1) + 2) = A)
+  LOOP AT GT_DATA INTO GS_DATA.
+
+    SELECT
+ A~MATNR,
+ A~WERKS,
+ A~LGORT,
+ A~LABST
+* B~MEINS
+ FROM MARD AS A
+ INNER JOIN MARDH AS B ON A~MATNR = B~MATNR
+ INTO TABLE @GT_MAR_A " 결과를 GT_MAR_A에 저장
+ FOR ALL ENTRIES IN @GT_DATA " GT_DATA의 각 라인에 해당하는 데이터만 조회
+ WHERE A~LFGJA = @GV_YEAR_F
+   AND A~LFMON = @GV_MONTH_F
+   AND A~MATNR = @GT_DATA-MATNR " FOR ALL ENTRIES 사용 시 이렇게 참조
+   AND A~WERKS = @GT_DATA-WERKS
+   AND A~LGORT = @GT_DATA-LGORT.
+
+    " 2) 조회 From 일자가 1일이 아닌경우 1일부터 'From일자 -1'일 까지 재고 이동 내역, ex) 07.10 ~ 07.20할 경우에는 10~20까지
+    DATA: LV_NUM_CHAR_IN  TYPE N LENGTH 2,
+          LV_NUM_CHAR_OUT TYPE N LENGTH 2.
+
+    DATA: LV_START_DATE TYPE SY-DATUM,
+          LV_END_DATE   TYPE SY-DATUM.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+      EXPORTING
+        INPUT  = GV_DD_B
+      IMPORTING
+        OUTPUT = LV_NUM_CHAR_OUT.
+
+    LV_NUM_CHAR_OUT = |{ GV_DD_B ALPHA = IN }|.
+
+    LV_START_DATE = |{ S_DATE-LOW(6) }01|. " 예: '202507' -> '20250701'
+    LV_END_DATE   = |{ S_DATE-LOW(6) }{ LV_NUM_CHAR_OUT }|. " 예: '202507' + '31' -> '20250731'
+
+    SELECT
+    A~BWART,
+    A~WERKS,
+    A~LGORT,
+    A~MATNR,
+    A~MENGE,
+    A~MEINS,
+    A~SHKZG,
+    A~BUDAT,
+      A~MBLNR,
+      A~ZEILE
+    FROM MATDOC AS A
+    INNER JOIN ZMMT0040 AS B ON B~WERKS = A~WERKS AND B~BWART = A~BWART AND A~SHKZG = B~SHKZG
+    INTO TABLE @GT_MAR_B " 결과를 GT_MAR_B에 저장
+    FOR ALL ENTRIES IN @GT_DATA " GT_DATA의 각 라인에 해당하는 데이터만 조회
+    WHERE A~BUDAT BETWEEN @LV_START_DATE AND @LV_END_DATE
+      AND A~MATNR = @GT_DATA-MATNR
+      AND A~WERKS = @GT_DATA-WERKS
+      AND A~LGORT = @GT_DATA-LGORT
+      AND B~DELFLG <> @GC_X.
+
+  ENDLOOP.
+
+  LOOP AT GT_DATA ASSIGNING FIELD-SYMBOL(<FS_DATA>).
+
+    " OPEST 필드 초기화 (각 자재/플랜트/저장위치 조합에 대한 합계 시작)
+    <FS_DATA>-OPEST = 0.
+
+    " GT_MAR_A (MARD) 데이터에서 찾기
+    READ TABLE GT_MAR_A ASSIGNING FIELD-SYMBOL(<FS_MAR_A>)
+      WITH KEY WERKS = <FS_DATA>-WERKS
+               LGORT = <FS_DATA>-LGORT
+               MATNR = <FS_DATA>-MATNR.
+
+    IF SY-SUBRC EQ 0.
+      <FS_DATA>-OPEST = <FS_DATA>-OPEST + <FS_MAR_A>-LABST.
+      <FS_DATA>-MEINS = <FS_MAR_A>-MEINS.
+    ENDIF.
+
+    " GT_MAR_B (MATDOC) 데이터에서 찾기 및 누적
+*    MATDOC은 하나의 키 조합에 여러 라인이 있을 수 있으므로 LOOP AT WHERE 사용
+    LOOP AT GT_MAR_B ASSIGNING FIELD-SYMBOL(<FS_MAR_B>)
+      WHERE WERKS = <FS_DATA>-WERKS
+        AND LGORT = <FS_DATA>-LGORT
+        AND MATNR = <FS_DATA>-MATNR.
+
+      IF <FS_MAR_B>-SHKZG EQ GC_H. " 대변 (일반적으로 재고 감소)
+        <FS_DATA>-OPEST = <FS_DATA>-OPEST - <FS_MAR_B>-MENGE.
+      ELSE. " 차변 (일반적으로 재고 증가)
+        <FS_DATA>-OPEST = <FS_DATA>-OPEST + <FS_MAR_B>-MENGE.
+      ENDIF.
+
+    ENDLOOP.
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALC_GRGI
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALC_GRGI .
+
+  SELECT
+      A~WERKS,
+      A~LGORT,
+      A~MATNR,
+      A~SHKZG,
+      A~MENGE
+      FROM  MATDOC AS A INNER JOIN ZMMT0040 AS B
+      ON B~WERKS = A~WERKS
+      AND B~BWART = A~BWART
+      AND B~SHKZG = A~SHKZG
+      WHERE A~BUDAT IN @S_DATE AND B~DELFLG <> @GC_X
+      INTO CORRESPONDING FIELDS OF TABLE @GT_SH.
+
+  IF SY-SUBRC EQ 0.
+
+    SORT GT_SH BY WERKS LGORT MATNR.
+
+    LOOP AT GT_DATA ASSIGNING FIELD-SYMBOL(<FS_MENGE>).
+
+      <FS_MENGE>-GRQTY = 0.
+      <FS_MENGE>-ISQTY = 0.
+
+      LOOP AT GT_SH INTO DATA(LS_SH_ROW)
+        WHERE WERKS = <FS_MENGE>-WERKS
+          AND LGORT = <FS_MENGE>-LGORT
+          AND MATNR = <FS_MENGE>-MATNR.
+
+        CASE LS_SH_ROW-SHKZG.
+          WHEN GC_S.
+            <FS_MENGE>-GRQTY = <FS_MENGE>-GRQTY + LS_SH_ROW-MENGE. " 입고
+          WHEN GC_H.
+            <FS_MENGE>-ISQTY = <FS_MENGE>-ISQTY + LS_SH_ROW-MENGE. " 출고
+          WHEN OTHERS.
+            " 기타 SHKZG 값에 대한 처리 (필요시)
+        ENDCASE.
+
+      ENDLOOP.
+
+      " 기말 수량 ( 기초 재고 + 입고 수량 - 출고 수량)
+      <FS_MENGE>-CLOST = <FS_MENGE>-OPEST + <FS_MENGE>-GRQTY - <FS_MENGE>-ISQTY.
+
+    ENDLOOP.
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALC_OPEST_AMT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALC_OPEST_AMT .
+
+  SELECT
+  A~MATNR, " 자재 번호
+  A~BWKEY, " 플랜트
+  A~SALK3, " 평가 재고 총액
+  A~LBKUM "  총 평가 재고
+  FROM MBEWH AS A
+  WHERE A~LFGJA = @S_DATE-HIGH(4)
+  AND A~LFMON = @S_DATE-HIGH+4(2)
+  INTO CORRESPONDING FIELDS OF TABLE @GT_SALK3.
+
+  IF SY-SUBRC EQ 0.
+
+    SORT GT_SALK3 BY MATNR BWKEY SALK3 LBKUM.
+
+    LOOP AT GT_DATA ASSIGNING FIELD-SYMBOL(<FS_SALK3>).
+
+      <FS_SALK3>-OPEST_AMOUNT = 0. " 기초 재고 금액
+
+      LOOP AT GT_SALK3 INTO GS_SALK3
+        WHERE MATNR = <FS_SALK3>-MATNR
+        AND BWKEY = <FS_SALK3>-WAERS.
+
+        <FS_SALK3>-OPEST_AMOUNT = <FS_SALK3>-OPEST_AMOUNT + GS_SALK3-SALK3.
+
+      ENDLOOP.
+    ENDLOOP.
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALC_UNIT_PRICE
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALC_UNIT_PRICE .
+
+  DATA: LV_POPER TYPE CHAR3.
+
+  CONCATENATE '0' S_DATE-HIGH+4(2) INTO LV_POPER.
+
+  LOOP AT GT_DATA ASSIGNING FIELD-SYMBOL(<FS_PRS_B>).
+
+    SELECT
+      A~MATNR, " 자재코드
+      A~BWKEY, " 평가영역 ( 플랜트 )
+      A~KALN1, " 원가추정번호
+      A~VPRSV, " 가격 관리 지시자 ( S or V )
+      A~STPRS, " 표준 원가 ( VPRSV가 S인 경우 )
+      A~VERPR, " 이동평균가 ( VPRSV가 V인 경우 )
+      B~WAERS, " 통화
+      A~LFGJA,
+      A~LFMON,
+      B~BDATJ,
+      B~POPER
+      FROM MBEW AS A LEFT OUTER JOIN CKMLCR AS B ON A~KALNR = B~KALNR
+      WHERE B~BDATJ = @S_DATE-HIGH(4) AND B~POPER = @LV_POPER " 원가쪽에서 데이터 넣어주어야 함
+      AND B~UNTPER = 000 AND B~CURTP = 10
+      AND A~MATNR = @<FS_PRS_B>-MATNR AND A~BWKEY = @<FS_PRS_B>-WERKS
+      INTO CORRESPONDING FIELDS OF TABLE @GT_PRS.
+
+    LOOP AT GT_PRS INTO GS_PRS WHERE MATNR = <FS_PRS_B>-MATNR AND BWKEY = <FS_PRS_B>-WERKS.
+
+      <FS_PRS_B>-STPRS = GS_PRS-STPRS.
+      <FS_PRS_B>-VERPR  = GS_PRS-VERPR.
+      <FS_PRS_B>-VPRSV = GS_PRS-VPRSV. " S or V
+
+    ENDLOOP.
+
+    IF LINES( GT_PRS ) <= 0.
+
+      DATA: LV_LFGJA TYPE LFGJA,
+            LV_LFMON TYPE LFMON.
+
+      SELECT SINGLE
+        LFGJA, LFMON INTO (@LV_LFGJA, @LV_LFMON)
+        FROM MBEW WHERE MATNR = @<FS_PRS_B>-MATNR AND BWKEY = @<FS_PRS_B>-WERKS.
+
+      IF SY-SUBRC EQ 0.
+        " 해당 연월의 가격 가져옴
+
+        SELECT
+          MATNR,
+          BWKEY,
+          VPRSV,
+          VERPR,
+          STPRS
+          FROM MBEW WHERE LFGJA = @LV_LFGJA AND LFMON = @LV_LFMON
+          AND MATNR = @<FS_PRS_B>-MATNR AND BWKEY = @<FS_PRS_B>-WERKS
+          INTO CORRESPONDING FIELDS OF TABLE @GT_PRS_B.
+
+        LOOP AT GT_PRS_B INTO GS_PRS_B WHERE MATNR = <FS_PRS_B>-MATNR AND BWKEY = <FS_PRS_B>-WERKS.
+
+          <FS_PRS_B>-STPRS = GS_PRS_B-STPRS.
+          <FS_PRS_B>-VERPR  = GS_PRS_B-VERPR.
+          <FS_PRS_B>-VPRSV = GS_PRS_B-VPRSV. " S or V
+
+        ENDLOOP.
+
+      ELSEIF SY-SUBRC NE 0.
+
+        SELECT
+        MATNR,
+        BWKEY,
+        LFGJA,
+        LFMON,
+        VERPR,
+        STPRS
+        FROM MBEWH WHERE LFGJA = @S_DATE-HIGH(4) AND LFMON = @S_DATE-HIGH+4(2)
+        INTO CORRESPONDING FIELDS OF TABLE @GT_PRS_BH.
+
+        LOOP AT GT_PRS_BH INTO GS_PRS_BH WHERE MATNR = <FS_PRS_B>-MATNR AND BWKEY = <FS_PRS_B>-WERKS.
+
+          <FS_PRS_B>-STPRS = GS_PRS_BH-STPRS.
+          <FS_PRS_B>-VERPR  = GS_PRS_BH-VERPR.
+          <FS_PRS_B>-VPRSV = GS_PRS_BH-VPRSV. " S or V
+
+        ENDLOOP.
+
+      ENDIF.
+
+    ENDIF.
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALC_AMOUNT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALC_AMOUNT .
+
+  LOOP AT GT_DATA ASSIGNING FIELD-SYMBOL(<FS_AMT>).
+
+    <FS_AMT>-OPEST_AMOUNT = <FS_AMT>-OPEST * <FS_AMT>-STPRS. " 기초 재고 금액
+    <FS_AMT>-GRQTY_AMOUNT = <FS_AMT>-GRQTY * <FS_AMT>-STPRS. " 입고 재고 금액
+    <FS_AMT>-ISQTY_AMOUNT = <FS_AMT>-ISQTY * <FS_AMT>-STPRS. " 출고 재고 금액
+    <FS_AMT>-CLOST_AMOUNT = <FS_AMT>-CLOST * <FS_AMT>-STPRS. " 기말 재고 금액
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALC_CURST
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALC_CURST .
+
+  " 현 재고 수량
+  SELECT
+    MATNR,
+    WERKS,
+    LGORT,
+    LABST
+    FROM MARD
+    INTO CORRESPONDING FIELDS OF TABLE @GT_CUR.
+
+  " 현 재고 금액 MBEW-VERPR (이평가) MBEW-STPRS (표준가)
+  SELECT
+    MATNR,
+    BWKEY,
+    SALK3
+    FROM MBEW
+    INTO CORRESPONDING FIELDS OF TABLE @GT_CUR_A.
+
+  LOOP AT GT_DATA ASSIGNING FIELD-SYMBOL(<FS_CUR>).
+
+    LOOP AT GT_CUR INTO GS_CUR WHERE MATNR = <FS_CUR>-MATNR AND WERKS = <FS_CUR>-WERKS AND LGORT = <FS_CUR>-LGORT.
+      <FS_CUR>-CURST = GS_CUR-LABST. "  수량
+    ENDLOOP.
+
+    LOOP AT GT_CUR_A INTO GS_CUR_A WHERE MATNR = <FS_CUR>-MATNR AND BWKEY = <FS_CUR>-WERKS.
+      <FS_CUR>-CURST_AMOUNT = GS_CUR_A-SALK3. "  금액
+    ENDLOOP.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_SORT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_SORT .
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'WERKS'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 1.
+  GS_SORT-SUBTOT = GC_X.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'NAME1'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 2.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'LGORT'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 3.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'LGOBE'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 4.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'MATNR'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 5.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'MAKTX'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 6.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  SORT GT_SORT BY FIELDNAME.
+ENDFORM.

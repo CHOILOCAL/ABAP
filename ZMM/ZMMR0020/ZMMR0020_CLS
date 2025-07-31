@@ -1,0 +1,19 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0020_CLS
+*&---------------------------------------------------------------------*
+CLASS LCL_HANDLER DEFINITION.
+  PUBLIC SECTION.
+
+    CLASS-METHODS :
+      ON_DOUBLE_CLICK FOR EVENT DOUBLE_CLICK OF CL_GUI_ALV_GRID
+        IMPORTING es_row_no e_column.
+
+ENDCLASS.
+
+CLASS LCL_HANDLER IMPLEMENTATION.
+
+  METHOD ON_DOUBLE_CLICK.
+    PERFORM HANDLER_DOUBLE_CLICK USING es_row_no e_column.
+  ENDMETHOD.
+
+ENDCLASS.

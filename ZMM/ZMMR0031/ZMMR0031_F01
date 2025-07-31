@@ -1,0 +1,987 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0031_F01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form GET_DATA
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM GET_DATA .
+
+  DATA: LINE_TABLE TYPE TABLE OF TLINE,
+*        LS_STRING  TYPE STRING,
+        LS_THEAD   TYPE THEAD,
+        LT_THEAD   LIKE TABLE OF LS_THEAD.
+  DATA: LT_TEXT_IDS TYPE TABLE OF TDID WITH EMPTY KEY.
+*        LS_TEXT_ID  TYPE TDID.
+
+  DATA: LV_STRING_LINE TYPE STRING.
+
+*  CLEAR LS_STRING.
+
+  " 텍스트 ID 초기화
+*  LS_TEXT_ID = 'F01'. APPEND LS_TEXT_ID TO LT_TEXT_IDS.
+*  LS_TEXT_ID = GC_F02. APPEND LS_TEXT_ID TO LT_TEXT_IDS.
+*  LS_TEXT_ID = GC_F05. APPEND LS_TEXT_ID TO LT_TEXT_IDS.
+*  LS_TEXT_ID = GC_F11. APPEND LS_TEXT_ID TO LT_TEXT_IDS.
+
+  " 원사업자 데이터
+  SELECT SINGLE
+    STCD2,
+    KR_REPRES,
+    NAME1,
+    TEL_NUMBER,
+    E~BUKRS,
+    BRANCH
+    FROM ADRC AS A LEFT OUTER JOIN J_1BBRANCH AS B
+    ON A~ADDRNUMBER = B~ADRNR
+    LEFT OUTER JOIN EKKO AS E
+    ON E~BUKRS = B~BUKRS AND B~BRANCH = E~BUKRS
+    WHERE B~BUKRS = 4000 AND B~BRANCH = 4000
+    INTO CORRESPONDING FIELDS OF @GS_REPRES.
+
+  SELECT
+*    BB~STCD2, " 사업자등록번호
+*    BB~KR_REPRES, " 대표자
+*    I~NAME1 AS NAME3, " 사업자명
+*    I~TEL_NUMBER AS TTEL_NUMBER, " 전화번호
+    A~WERKS, " 플랜트
+    D~NAME1, " 플랜트명
+    A~EBELN, " 구매오더 번호
+    B~EKGRP, " 구매그룹
+    C~EKNAM, " 담당자명
+    C~TEL_NUMBER AS ZTEL_NUMBER, " 담당자 연락처
+    C~SMTP_ADDR, " 담당자 E-mail
+    B~LIFNR, " 공급업체 번호
+    E~NAME1 AS NAME2," 공급업체 명
+    F~TAXNUM, " 공급업체 사업자등록번호
+    E~J_1KFREPRE," 공급업체 대표자명
+    H~TEL_EXTENS," 대표 전화번호
+    M~REMARK," 담당자명
+    H~TEL_NUMBER," 담당자 연락처
+    J~LGORT, " 저장위치
+    J~LGOBE, "저장위치명
+*---------------------------------------------------계약내용
+    " 계약 관리 번호(READ_TEXT)
+    B~ZTERM, " 지급조건 코드
+    G~TEXT1, " 지급조건 명
+    " 검사방법(READ_TEXT)
+    " 납품조건(READ_TEXT)
+    B~AEDAT, " 구매오더 생성일
+    A~EBELP, " 구매오더 라인번호
+    A~MATNR, " 자재코드
+    A~TXZ01, " 자재코드 내역
+    I~CITY1," CITY1 플랜트
+    I~CITY2, " CITY2 플랜트
+    I~STREET, " STREET 플랜트
+    A~MENGE, " 수량
+    A~PEINH, " 단가 단위
+    A~MEINS, " 수량 단위
+    A~NETPR, " 단가
+    A~NETWR, " 금액
+    B~WAERS, " 통화
+    K~EINDT, " 납품일
+    D~ADRNR, " 고유주소
+    L~ADDRNUMBER, " 넘버
+    N~SMTP_ADDR AS ZSMTP_ADDR
+*---------------------------------------------------계약내용
+    FROM EKPO AS A LEFT OUTER JOIN EKKO AS B ON A~EBELN = B~EBELN " 구매오더 번호
+*    LEFT OUTER JOIN J_1BBRANCH AS BB ON B~BUKRS = BB~BUKRS AND BB~BRANCH = B~BUKRS
+    LEFT OUTER JOIN T024 AS C ON B~EKGRP = C~EKGRP " 구매 그룹
+    LEFT OUTER JOIN T001W AS D ON A~WERKS = D~WERKS
+    LEFT OUTER JOIN LFA1 AS E ON B~LIFNR = E~LIFNR
+    LEFT OUTER JOIN DFKKBPTAXNUM AS F ON F~PARTNER = E~LIFNR " 공급업체 코드
+    LEFT OUTER JOIN T052U AS G ON G~ZTERM = B~ZTERM AND G~SPRAS = @SY-LANGU
+    LEFT OUTER JOIN T001L AS J ON J~WERKS = A~WERKS AND J~LGORT = A~LGORT
+    LEFT OUTER JOIN BUT020 AS L ON L~PARTNER = E~LIFNR
+    LEFT OUTER JOIN ADR2 AS H ON H~ADDRNUMBER = L~ADDRNUMBER
+    LEFT OUTER JOIN ADRC AS I ON I~ADDRNUMBER = H~ADDRNUMBER
+    LEFT OUTER JOIN ADRT AS M ON M~ADDRNUMBER = L~ADDRNUMBER AND M~LANGU = @SY-LANGU AND M~COMM_TYPE = 'TEL' AND M~CONSNUMBER = '001'
+    LEFT OUTER JOIN ADR6 AS N ON N~ADDRNUMBER = L~ADDRNUMBER AND M~CONSNUMBER = '001'
+    LEFT OUTER JOIN EKET AS K ON K~EBELN = A~EBELN AND K~EBELP = A~EBELP
+    WHERE A~WERKS IN @S_WERKS
+    AND A~MATNR IN @S_MATNR
+    AND A~EBELN IN @S_EBELN
+    AND A~CREATIONDATE IN @S_AEDAT
+    AND F~TAXTYPE = @GC_TAXTYPE
+    INTO CORRESPONDING FIELDS OF TABLE @GT_DATA.
+
+  IF SY-SUBRC EQ 0.
+
+    SORT GT_DATA BY WERKS EBELN EBELP.
+
+    DELETE ADJACENT DUPLICATES FROM GT_DATA COMPARING WERKS EBELN EBELP.
+
+  ENDIF.
+
+  LOOP AT GT_DATA INTO GS_DATA.
+
+    DATA: LS_ADRC_DATA TYPE ADRC.
+
+    SELECT SINGLE CITY1, STREET
+      FROM ADRC
+      INTO CORRESPONDING FIELDS OF @LS_ADRC_DATA
+      WHERE ADDRNUMBER = @GS_DATA-ADRNR.
+
+    IF SY-SUBRC EQ 0.
+      GS_DATA-ZCITY   = LS_ADRC_DATA-CITY1.
+      GS_DATA-ZSTREET = LS_ADRC_DATA-STREET.
+    ELSE.
+      GS_DATA-ZCITY   = ''.
+      GS_DATA-ZSTREET = ''.
+    ENDIF.
+
+    LS_THEAD-TDSPRAS = SY-LANGU. " 현재 시스템 언어로 설정
+    LS_THEAD-TDNAME  = GS_DATA-EBELN. " 구매 오더 번호를 텍스트 이름으로 설정 (EKKO 객체용)
+    LS_THEAD-TDOBJECT = 'EKKO'. " 구매 오더 헤더 텍스트의 오브젝트
+
+*    LOOP AT LT_TEXT_IDS INTO LS_TEXT_ID.
+    LS_THEAD-TDID = 'F01'. " 현재 텍스트 ID 설정
+
+    REFRESH LINE_TABLE.
+*      CLEAR LS_STRING.
+
+    CALL FUNCTION 'READ_TEXT'
+      EXPORTING
+        CLIENT   = SY-MANDT
+        ID       = LS_THEAD-TDID
+        LANGUAGE = LS_THEAD-TDSPRAS
+        NAME     = LS_THEAD-TDNAME
+*       NAME     = '4500000015'
+        OBJECT   = LS_THEAD-TDOBJECT
+      TABLES
+        LINES    = LINE_TABLE
+      EXCEPTIONS
+        OTHERS   = 1.
+
+    IF SY-SUBRC EQ 0.
+*      LINE_TABLE[4] " 현재 개발 데이터상 등록되어 있지 않은 구매오더들 존재
+      LOOP AT LINE_TABLE INTO DATA(LS_LINE_TABLE).
+        IF SY-TABIX = 1.
+          GS_DATA-CONTRACT_NUM = LS_LINE_TABLE-TDLINE.
+        ELSEIF SY-TABIX = 2.
+          GS_DATA-TEST_S = LS_LINE_TABLE-TDLINE.
+        ELSEIF SY-TABIX = 3.
+          GS_DATA-DELEVERYTERMS = LS_LINE_TABLE-TDLINE.
+        ELSEIF SY-TABIX = 4.
+          GS_DATA-CONTRACT_ADD_TEXT = LS_LINE_TABLE-TDLINE.
+        ENDIF.
+      ENDLOOP.
+
+    ELSE.
+      CLEAR: GS_DATA-CONTRACT_NUM,
+             GS_DATA-TEST_S,
+             GS_DATA-DELEVERYTERMS,
+             GS_DATA-CONTRACT_ADD_TEXT.
+
+    ENDIF.
+
+    GS_DATA-GV_YYYY = GS_DATA-AEDAT(4).
+    GS_DATA-GV_MM = GS_DATA-AEDAT+4(2).
+    GS_DATA-GV_DD = GS_DATA-AEDAT+6(2).
+
+    GS_DATA-NETWR = GS_DATA-MENGE * GS_DATA-NETPR / GS_DATA-PEINH. " 금액 계산
+
+    GS_DATA-CITY_STREET = GS_DATA-ZCITY && ' ' && GS_DATA-ZSTREET." 납품처 주소
+    GS_DATA-UNIT_CURR = GS_DATA-PEINH && GS_DATA-MEINS. " 수량 단위 + 단가 단위
+
+    MODIFY GT_DATA FROM GS_DATA TRANSPORTING CONTRACT_NUM TEST_S DELEVERYTERMS GV_YYYY GV_MM GV_DD CITY_STREET NETWR UNIT_CURR CONTRACT_ADD_TEXT.
+
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form CALL_SCREEN
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM CALL_SCREEN .
+
+  DATA: LV_LINE  TYPE I.
+
+  LV_LINE = LINES( GT_DATA ).
+
+  IF LV_LINE > 0.
+    MESSAGE S003(ZMM01) WITH LV_LINE.
+    CALL SCREEN 0100.
+  ELSE.
+    MESSAGE S002(ZMM01) DISPLAY LIKE 'E'.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form REFRESH_GRID
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM REFRESH_GRID .
+
+  CALL METHOD GO_GRID->REFRESH_TABLE_DISPLAY.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_GRID
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_GRID .
+
+  CREATE OBJECT GO_DOCK
+    EXPORTING
+      REPID     = SY-REPID
+      DYNNR     = SY-DYNNR
+      EXTENSION = 5000.
+
+  CREATE OBJECT GO_GRID
+    EXPORTING
+      I_PARENT = GO_DOCK.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_FCAT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_FCAT .
+
+  PERFORM SET_FIELDCATALOG USING GT_FCAT:
+  " FIELDNAME"       "COLTEXT"           "REF_TABLE      "REF_FIELD     "KEY     "EDIT     "NO_OUT     " OUTPUTLEN     "DO_SUM     "HOTSPOT    "NO_ZERO      "JUST
+    'WERKS'                '플랜트'         'EKPO'      'WERKS'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'NAME1'                '플랜트명'         'T001W'      'NAME1'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'EBELN'                '구매오더 번호'         'EKPO'      'EBELN'     'X'   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'EKGRP'                '구매그룹'         'EKKO'      'EKGRP'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'EKNAM'                '담당자'         'T024'      'EKNAM'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'ZTEL_NUMBER'                '담당자 연락처'         'T024'      'TEL_NUMBER'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'SMTP_ADDR'                '담당자 이메일'         'T024'      'SMTP_ADDR'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+
+    'LIFNR'                '공급업체 번호'         'EKKO'      'LIFNR'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+
+    'NAME2'                '공급업체 명'         'LFA1'      'LIFNR'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'TAXNUM'                '공급업체 사업자등록번호'         'DFKKBPTAXNUM'      'TAXNUM'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+
+    'J_1KFREPRE'                '공급업체 대표자명'         'LFA1'      'J_1KFREPRE'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+*    'CITY_STREET'                '공급업체 주소'         ''      ''     ''   ' '   ' '     '20'         ' '      ' '      ' '      'C',
+    'TEL_EXTENS'                '전화번호'         ''      ''     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'REMARK'                '담당자'         'ADRT'      'AD_REMARK2'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'TEL_NUMBER'                '담당자 연락처'         'ADR2'      'TEL_NUMBER'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'ZSMTP_ADDR'                '담당자 이메일'         'ADR6'      'SMTP_ADDR'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+
+    'CONTRACT_NUM'                '계약 관리 번호'         ''      ''     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'ZTERM'                '지급조건 코드'         'EKKO'      'ZTERM'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'TEXT1'                '지급조건 명'         'T052U'      'ZTERM'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'TEST_S'                '검사방법'         ''      ''     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+
+    'DELEVERYTERMS'                '납품조건'         ''      ''     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'CITY_STREET'                '납품장소'         ''      ''     ''   ' '   ' '     '30'         ' '      ' '      ' '      'C',
+
+    'AEDAT'                '구매오더 생성일'         'EKKO'      'AEDAT'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'EBELP'                '구매오더 라인번호'         'EKPO'      'EBELP'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'MATNR'                '자재코드'         'EKPO'      'MATNR'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'TXZ01'                '자재코드 내역'         'EKPO'      'TXZ01'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+
+     'MENGE'                '수량'         'EKPO'      'MENGE'     ''   ' '   ' '     '10'         ''      ' '      ' '      'C',
+     'PEINH'                '단가 수량'         'EKPO'      'PEINH'     ''   ' '   ' '     '10'         ''      ' '      ' '      'C',
+    'MEINS'                '수량 단위'         'EKPO'      'MEINS'     ''   ' '   ' '     '10'         ''      ' '      ' '      'C',
+*    'UNIT_CURR'                'ETC'         ''      ''     ''   ' '   ' '     '10'         ''      ' '      ' '      'C',
+    'NETPR'                '단가'         'EKPO'      'NETPR'     ''   ' '   ' '     '10'         ''      ' '      ' '      'C',
+    'NETWR'                '금액'         'EKPO'      'NETWR'     ''   ' '   ' '     '10'         ''      ' '      ' '      'C',
+    'WAERS'                '통화'         'EKKO'      'WAERS'     ''   ' '   ' '     '10'         ''      ' '      ' '      'C',
+
+    'LGORT'                '저장위치'         'EKPO'      'LGORT'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'LGOBE'                '저장위치명'         'T001L'      'LGOBE'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+    'EINDT'                '납품일'         'EKET'      'EINDT'     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C',
+'CONTRACT_ADD_TEXT'                'ETC'         ''      ''     ''   ' '   ' '     '10'         ' '      ' '      ' '      'C'.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_FIELDCATALOG
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> GT_FCAT
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&      --> P_
+*&---------------------------------------------------------------------*
+FORM SET_FIELDCATALOG
+  USING PT_FCAT TYPE LVC_T_FCAT
+                             PV_FIELD
+                             PV_TEXT
+                             PV_REF_TABLE
+                             PV_REF_FIELD
+                             PV_KEY
+                             PV_EDIT
+                             PV_NO_OUT
+                             PV_LEN
+                             PV_SUM
+                             PV_HOT
+                             PV_NO_ZERO
+                             PV_JUST.
+
+  GS_FCAT-FIELDNAME = PV_FIELD.
+  GS_FCAT-COLTEXT = PV_TEXT.
+  GS_FCAT-REF_TABLE = PV_REF_TABLE.
+  GS_FCAT-REF_FIELD = PV_REF_FIELD.
+  GS_FCAT-KEY = PV_KEY.
+  GS_FCAT-EDIT = PV_EDIT.
+  GS_FCAT-NO_OUT = PV_NO_OUT.
+  GS_FCAT-OUTPUTLEN = PV_LEN.
+  GS_FCAT-DO_SUM = PV_SUM.
+  GS_FCAT-HOTSPOT = PV_HOT.
+  GS_FCAT-NO_ZERO = PV_NO_ZERO.
+  GS_FCAT-JUST = PV_JUST.
+  GS_FCAT-DECIMALS_O = 0.
+  GS_FCAT-NO_MERGING = GC_X.
+
+  " Color 구분
+  CASE PV_FIELD.
+    WHEN 'LIFNR' OR 'NAME2' OR 'TAXNUM' OR 'J_1KFREPRE' OR 'TEL_EXTENS' OR 'TEL_NUMBER' OR 'CITY_STREET' OR 'REMARK' OR 'ZSMTP_ADDR' OR 'MENGE' OR 'NETPR' OR 'NETWR'.
+      GS_FCAT-EMPHASIZE = GC_X.
+*      WHEN ''
+    WHEN OTHERS.
+  ENDCASE.
+
+  CASE PV_FIELD.
+    WHEN 'MENGE'. " 수량 필드
+      GS_FCAT-DATATYPE    = 'QUAN'.
+      GS_FCAT-QFIELDNAME = 'MEINS'.
+*      GS_FCAT-DECIMALS_O = 0.
+      GS_FCAT-JUST = GC_R.
+
+    WHEN 'NETWR' OR 'NETPR'. " 금액 필드
+      GS_FCAT-DATATYPE    = 'CURR'.
+      GS_FCAT-CFIELDNAME = 'WAERS'.
+*      GS_FCAT-DECIMALS_O = -1.
+      GS_FCAT-JUST = GC_R.
+
+    WHEN OTHERS.
+  ENDCASE.
+
+  APPEND GS_FCAT TO PT_FCAT.
+
+  CLEAR GS_FCAT.
+
+*  SORT GT_DATA BY WERKS EBELN.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_LAYO
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_LAYO .
+
+  CLEAR GS_LAYO.
+
+  GS_LAYO-SEL_MODE = 'A'.
+  GS_LAYO-ZEBRA = GC_X.
+  GS_LAYO-INFO_FNAME = ''.
+  GS_LAYO-STYLEFNAME = ''.
+  GS_LAYO-NO_ROWINS = ABAP_TRUE.
+
+  CLEAR: GS_VARIANT.
+  GS_VARIANT-REPORT = SY-REPID.
+  GS_VARIANT-HANDLE = SY-DYNNR.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_FUNC
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_FUNC .
+
+  "------------------------------------------------------------------
+  " 1. 사용할 버튼은 주석처리
+  "------------------------------------------------------------------
+*  PERFORM exclude USING 'MC_FC_SORT_ASC'          CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_SORT_DSC'          CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_FIND'              CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_FC_FIND_MORE'         CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_MB_FILTER'            CHANGING gt_exclude01.
+*  PERFORM EXCLUDE USING 'MC_MB_SUM'               CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_MB_SUBTOT'            CHANGING GT_EXCLUDE.
+*  PERFORM exclude USING 'MC_MB_EXPORT'            CHANGING gt_exclude01.
+*  PERFORM exclude USING 'MC_MB_VARIANT'           CHANGING gt_exclude01.
+
+
+  "------------------------------------------------------------------
+  " 2. 사용하지 않을 버튼만 입력
+  "------------------------------------------------------------------
+
+  " 메뉴 버튼 제외
+*  PERFORM EXCLUDE USING 'MC_MB_VIEW'              CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_MB_PASTE'             CHANGING GT_EXCLUDE.
+
+  " 메뉴 버튼외 버튼들 제외
+*  PERFORM EXCLUDE USING 'MC_FC_HELP'              CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_INFO'              CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_VIEWS'             CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_GRAPH'             CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_PRINT'             CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_DETAIL'            CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_REFRESH'           CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_CUT'           CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_UNDO'          CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_COPY'          CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_PASTE'         CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_COPY_ROW'      CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_MOVE_ROW'      CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_DELETE_ROW'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_INSERT_ROW'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_APPEND_ROW'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_WORD_PROCESSOR'    CHANGING GT_EXCLUDE.
+*  PERFORM EXCLUDE USING 'MC_FC_LOC_PASTE_NEW_ROW' CHANGING GT_EXC.
+
+  "------------------------------------------------------------------
+  " 전체 제외 할 경우는 주석제외 후 활성화
+  "------------------------------------------------------------------
+*  PERFORM exclude USING 'MC_FC_EXCL_ALL'          CHANGING gt_exclude01.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form DISPLAY_ALV
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM DISPLAY_ALV .
+
+  SORT GT_DATA BY WERKS NAME1 EBELN EBELP.
+
+  SET HANDLER : LCL_HANDLER=>ON_DOUBLE_CLICK FOR GO_GRID.
+
+  CALL METHOD GO_GRID->SET_TABLE_FOR_FIRST_DISPLAY
+    EXPORTING
+      IS_LAYOUT                     = GS_LAYO
+      IT_TOOLBAR_EXCLUDING          = GT_EXC
+      I_SAVE                        = GC_U
+      IS_VARIANT                    = GS_VARIANT
+    CHANGING
+      IT_OUTTAB                     = GT_DATA
+      IT_FIELDCATALOG               = GT_FCAT
+      IT_SORT                       = GT_SORT
+    EXCEPTIONS
+      INVALID_PARAMETER_COMBINATION = 1
+      PROGRAM_ERROR                 = 2
+      TOO_MANY_LINES                = 3
+      OTHERS                        = 4.
+
+  IF SY-SUBRC <> 0.
+    MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+               WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form INIT_SELOPT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM INIT_SELOPT .
+
+  CLEAR: S_AEDAT.
+
+  S_AEDAT-SIGN   = 'I'.
+  S_AEDAT-OPTION = 'BT'.
+  S_AEDAT-LOW    = SY-DATUM. " 현재일자
+  S_AEDAT-HIGH = SY-DATUM. " 현재일자
+
+  CALL FUNCTION 'RP_CALC_DATE_IN_INTERVAL'
+    EXPORTING
+      DATE      = SY-DATUM
+      DAYS      = '00'
+      MONTHS    = '01'
+      SIGNUM    = '-'
+      YEARS     = '00'
+    IMPORTING
+      CALC_DATE = S_AEDAT-LOW. " 현재일자 - 1M
+
+  APPEND S_AEDAT.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form READ_SMARTFORMS
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM READ_SMARTFORMS.
+
+  DATA:
+    LV_FM_NAME         TYPE RS38L_FNAM,       " 스마트폼 함수 모듈 이름
+    LS_CONTROL_PARAM   TYPE SSFCTRLOP,        " 제어 매개변수
+    LS_OUTPUT_OPTIONS  TYPE SSFCOMPOP,         " 출력 옵션
+    LV_JOB_OUTPUT_INFO TYPE SSFCRESCL,        " 출력 결과 정보
+    LT_DATA            TYPE STANDARD TABLE OF ZMMPOS0031 , " 스마트폼 데이터 테이블
+    LS_DATA            TYPE ZMMPOS0031,       " 단일 데이터 구조
+    LT_SELECTED_ROWS   TYPE LVC_T_ROW,          " 선택된 행 인덱스 테이블
+    LS_SELECTED_ROW    TYPE LVC_S_ROW,          " 단일 선택 행
+    LT_PDF_XSTRING     TYPE XSTRING,            " PDF 데이터
+    LV_PDF_SIZE        TYPE I,
+    LT_RAW_DATA        TYPE STANDARD TABLE OF SOLIX,
+    LT_LINES           TYPE STANDARD TABLE OF TLINE,
+    LV_FILENAME        TYPE STRING,
+    LV_DL_PATH         TYPE STRING,
+    LV_DL_FULLPATH     TYPE STRING,
+    LV_SUM             TYPE NETWR.
+
+  IF GO_GRID IS BOUND AND LINES( GT_DATA ) > 0.
+
+    CLEAR: LT_SELECTED_ROWS.
+
+    CALL METHOD GO_GRID->GET_SELECTED_ROWS
+      IMPORTING
+        ET_INDEX_ROWS = LT_SELECTED_ROWS.
+
+    IF LINES( LT_SELECTED_ROWS ) EQ 0.
+      MESSAGE S007(ZMM01) DISPLAY LIKE GC_E.
+      EXIT.
+    ELSEIF LINES( LT_SELECTED_ROWS ) > 1.
+      MESSAGE S008(ZMM01) DISPLAY LIKE GC_E.
+      EXIT.
+    ENDIF.
+
+    IF NOT LT_SELECTED_ROWS IS INITIAL.
+
+      SORT GT_DATA BY WERKS EBELN.
+
+      CLEAR: LT_DATA, GS_SUM.
+*      REFRESH LT_DATA.
+
+      LOOP AT LT_SELECTED_ROWS INTO LS_SELECTED_ROW.
+        READ TABLE GT_DATA INTO GS_DATA INDEX LS_SELECTED_ROW-INDEX. " 선택한 Str (구매오더번호만 발라냄)
+        "------------------------------------------------ Smartform Header End
+        " PO 구매번호 1 : 라인번호 N
+        IF SY-SUBRC EQ 0.
+
+          DATA(CNT) = 0.
+
+          LOOP AT GT_DATA INTO LS_DATA.
+            IF LS_DATA-EBELN EQ GS_DATA-EBELN AND LS_DATA-WERKS = GS_DATA-WERKS.
+
+              GS_DATA = LS_DATA.
+
+              CNT = CNT + 1.
+              GS_DATA-GV_NO = CNT. " 라인 번호 할당
+
+              " 수량/단가/금액 포매팅 (Smartforms 용)
+              GS_DATA-ZMENGE = GS_DATA-MENGE.
+*              GS_DATA-ZNETPR = GS_DATA-NETPR.
+              GS_DATA-ZNETPR = GS_DATA-NETPR * 100.
+
+              IF GS_DATA-PEINH NE 1.
+                GS_DATA-ZNETWR = GS_DATA-ZMENGE * GS_DATA-ZNETPR / GS_DATA-PEINH. " 단위 계산
+              ELSE.
+                GS_DATA-ZNETWR = GS_DATA-ZMENGE * GS_DATA-ZNETPR.
+              ENDIF.
+
+              APPEND GS_DATA TO LT_DATA.
+            ELSE.
+*                EXIT.
+            ENDIF.
+
+          ENDLOOP.
+
+        ENDIF.
+        "------------------------------------------------- Smartform Item End
+
+      ENDLOOP.
+
+      LOOP AT LT_DATA INTO LS_DATA.
+
+        GS_SUM-AR_SUM = GS_SUM-AR_SUM + LS_DATA-ZNETWR / 100.
+*        GS_SUM-ZAR_SUM = GS_SUM-ZAR_SUM + LS_DATA-ZNETWR.
+
+      ENDLOOP.
+
+      GS_SUM-VAT_SUM = GS_SUM-AR_SUM / 10.
+      GS_SUM-CTR_SUM = GS_SUM-AR_SUM + GS_SUM-VAT_SUM.
+*      GS_SUM-ZVAT_SUM = GS_SUM-ZAR_SUM / 10.
+*      GS_SUM-ZCTR_SUM = GS_SUM-ZAR_SUM + GS_SUM-ZVAT_SUM.
+
+      PERFORM SF_HEADER_SUM USING GS_SUM. " 금액 String 읽기
+
+    ENDIF.
+
+    " 제어 매개변수 설정
+    CLEAR LS_CONTROL_PARAM.
+    LS_CONTROL_PARAM = VALUE #(
+    "NO_CLOSE = GC_X
+    "NO_OPEN = GC_X
+    NO_DIALOG = ' '
+    PREVIEW = GC_X
+    GETOTF = GC_X
+    ).
+
+    " 출력 옵션 설정
+    CLEAR LS_OUTPUT_OPTIONS.
+    LS_OUTPUT_OPTIONS-TDDEST = 'LOCL'.
+    LS_OUTPUT_OPTIONS-TDIMMED = ' '.
+    LS_OUTPUT_OPTIONS-TDNEWID = GC_X.
+    LS_OUTPUT_OPTIONS-TDDELETE = ' '.
+    LS_OUTPUT_OPTIONS-TDLIFETIME = '1'.
+    LS_OUTPUT_OPTIONS-TDCOVER = ' '.
+*    LS_OUTPUT_OPTIONS-TDPRINTER = 'KPSAPWIN'.
+*    LS_OUTPUT_OPTIONS-TDPRINTER = 'SWINCFK'.
+*    LS_OUTPUT_OPTIONS-TDCOPIES = '001'.
+*    LS_OUTPUT_OPTIONS-TDDEST   = 'LOCL'. " 논리 출력장치
+*    LS_OUTPUT_OPTIONS-TDIMMED = ' '.
+*    LS_OUTPUT_OPTIONS-TDNEWID = GC_X.
+*    LS_OUTPUT_OPTIONS-TDDELETE = ' '.
+*    LS_OUTPUT_OPTIONS-TDLIFETIME = 8.
+*    LS_OUTPUT_OPTIONS-TDPRINTER = 'SWINCFK'.       " 프린터 타입 없음 (미리보기용)
+*    LS_OUTPUT_OPTIONS-TDCOPIES = 1.
+
+
+    " 스마트폼 함수 모듈명 가져오기
+    CALL FUNCTION 'SSF_FUNCTION_MODULE_NAME'
+      EXPORTING
+        FORMNAME      = 'ZSF_MM_PO'  " 스마트폼 이름
+      IMPORTING
+        FM_NAME       = LV_FM_NAME
+      EXCEPTIONS
+        NO_FORM       = 1
+        NO_ACTIVATION = 2
+                        NO_DIFFERENT_CLIENT= 3
+        OTHERS        = 4.
+
+*      READ TABLE LT_DATA INDEX 1.
+
+    " 스마트폼 호출
+    CALL FUNCTION LV_FM_NAME
+      EXPORTING
+        CONTROL_PARAMETERS = LS_CONTROL_PARAM
+        OUTPUT_OPTIONS     = LS_OUTPUT_OPTIONS
+        USER_SETTINGS      = ''
+        IS_SUM             = GS_SUM " 금액
+        IS_HEAD            = GS_DATA " Header
+        IS_KR              = GS_REPRES
+      IMPORTING
+        JOB_OUTPUT_INFO    = LV_JOB_OUTPUT_INFO
+      TABLES
+        IT_ITEM            = LT_DATA
+      EXCEPTIONS
+        FORMATTING_ERROR   = 1
+        SEND_ERROR         = 2
+        USER_CANCELED      = 3
+        OTHERS             = 4.
+
+    IF SY-SUBRC <> 0.
+      MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+        WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      RETURN.
+    ENDIF.
+
+*---------------------------------------------------------------
+
+    CHECK LV_JOB_OUTPUT_INFO IS NOT INITIAL.
+
+    CALL FUNCTION 'CONVERT_OTF'
+      EXPORTING
+        FORMAT                = GC_PDF
+      IMPORTING
+        BIN_FILESIZE          = LV_PDF_SIZE
+        BIN_FILE              = LT_PDF_XSTRING
+      TABLES
+        OTF                   = LV_JOB_OUTPUT_INFO-OTFDATA
+        LINES                 = LT_LINES
+      EXCEPTIONS
+        ERR_NO_OTF_TABLE      = 1
+        ERR_FORMAT            = 2
+        ERR_CONV_NOT_POSSIBLE = 3
+        ERR_BAD_OTF           = 4
+        OTHERS                = 5.
+
+*      XSTRING -> SOLIX 변환
+    CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+      EXPORTING
+        BUFFER        = LT_PDF_XSTRING
+      IMPORTING
+        OUTPUT_LENGTH = LV_PDF_SIZE
+      TABLES
+        BINARY_TAB    = LT_RAW_DATA.
+*
+*
+*---------------------------------------------------------------
+*
+    CALL FUNCTION 'SSFCOMP_PDF_PREVIEW'
+      EXPORTING
+        I_OTF                    = LV_JOB_OUTPUT_INFO-OTFDATA[]
+      EXCEPTIONS
+        CONVERT_OTF_TO_PDF_ERROR = 1
+        CNTL_ERROR               = 2
+        OTHERS                   = 3.
+    IF SY-SUBRC <> 0.
+      MESSAGE 'PDF 미리보기 실행 실패' TYPE 'E'.
+      RETURN.
+    ENDIF.
+*
+*     파일명 생성 (예: PO_구매오더번호_시간.pdf)
+    CONCATENATE 'PO_[' LS_DATA-EBELN ']_ ' SY-DATUM SY-UZEIT '.pdf' INTO LV_FILENAME.
+
+*     PDF 저장 여부 팝업
+    DATA(LV_SAVE_CONFIRM) = SPACE.
+
+    CALL FUNCTION 'POPUP_TO_CONFIRM'
+      EXPORTING
+        TITLEBAR              = 'PDF 저장 확인'
+        TEXT_QUESTION         = 'PDF 파일을 저장하시겠습니까?'
+        TEXT_BUTTON_1         = '예'
+        TEXT_BUTTON_2         = '아니오'
+        DEFAULT_BUTTON        = '1'
+        DISPLAY_CANCEL_BUTTON = ' '
+      IMPORTING
+        ANSWER                = LV_SAVE_CONFIRM.
+
+    IF LV_SAVE_CONFIRM = '1'.
+
+      CALL METHOD CL_GUI_FRONTEND_SERVICES=>FILE_SAVE_DIALOG
+        EXPORTING
+          WINDOW_TITLE      = 'PDF 파일 저장'
+          DEFAULT_EXTENSION = 'pdf'
+          DEFAULT_FILE_NAME = LV_FILENAME
+          FILE_FILTER       = '*.pdf'
+          WITH_ENCODING     = GC_X
+        CHANGING
+          FILENAME          = LV_FILENAME
+          PATH              = LV_DL_PATH
+          FULLPATH          = LV_DL_FULLPATH.
+
+      IF SY-SUBRC = 0.
+
+        CALL METHOD CL_GUI_FRONTEND_SERVICES=>GUI_DOWNLOAD
+          EXPORTING
+            BIN_FILESIZE = LV_PDF_SIZE
+            FILENAME     = LV_DL_FULLPATH
+            FILETYPE     = 'BIN'
+          CHANGING
+            DATA_TAB     = LT_RAW_DATA.
+
+        IF SY-SUBRC = 0.
+          MESSAGE S005(ZMM01) DISPLAY LIKE 'S'.
+        ELSE.
+          MESSAGE S006(ZMM01) DISPLAY LIKE 'E'.
+        ENDIF.
+      ENDIF.
+
+    ELSE.
+
+    ENDIF.
+
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SET_SORT
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM SET_SORT .
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'WERKS'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 1.
+*  GS_SORT-SUBTOT = GC_X.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'NAME1'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 2.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'EBELN'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 3.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  GS_SORT-FIELDNAME = 'EBELP'.
+  GS_SORT-UP = GC_X.
+  GS_SORT-SPOS = 4.
+
+  APPEND GS_SORT TO  GT_SORT.
+
+  CLEAR: GS_SORT.
+
+  SORT GT_SORT BY FIELDNAME.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*& Form SF_HEADER_SUM
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> LV_SUM
+*&      <-- LV_SUM_STRING
+*&---------------------------------------------------------------------*
+FORM SF_HEADER_SUM CHANGING CS_GS_SUM TYPE ZMMPOS0032.
+
+  DATA: LS_SUM_STRING TYPE SPELL.
+  DATA: LT_SUMS TYPE TABLE OF NETWR.
+  DATA: LV_FIELD_NAME TYPE FIELDNAME.
+
+  " CS_GS_SUM (CHANGING 파라미터)에서 금액 값을 가져와 LT_SUMS에 추가
+  APPEND CS_GS_SUM-CTR_SUM TO LT_SUMS.
+  APPEND CS_GS_SUM-AR_SUM  TO LT_SUMS.
+  APPEND CS_GS_SUM-VAT_SUM TO LT_SUMS.
+
+  " 필드 이름을 순서대로 정의 (CS_GS_SUM의 String 필드 이름과 일치해야 함)
+  DATA: LT_FIELD_NAMES TYPE TABLE OF STRING.
+  APPEND 'CTR_SUM_STRING' TO LT_FIELD_NAMES.
+  APPEND 'AR_SUM_STRING'  TO LT_FIELD_NAMES.
+  APPEND 'VAT_SUM_STRING' TO LT_FIELD_NAMES.
+
+  FIELD-SYMBOLS: <FS_SUM>          TYPE NETWR,
+                 <FS_TARGET_FIELD> TYPE SPELL-WORD.
+  DATA: LV_INDEX TYPE I.
+
+  LOOP AT LT_SUMS ASSIGNING <FS_SUM>.
+    LV_INDEX = SY-TABIX.
+
+    READ TABLE LT_FIELD_NAMES INTO LV_FIELD_NAME INDEX LV_INDEX.
+    IF SY-SUBRC NE 0.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR LS_SUM_STRING.
+    CALL FUNCTION 'SPELL_AMOUNT'
+      EXPORTING
+        AMOUNT   = <FS_SUM>
+        CURRENCY = 'KRW'
+        LANGUAGE = SY-LANGU
+      IMPORTING
+        IN_WORDS = LS_SUM_STRING
+      EXCEPTIONS
+        OTHERS   = 1.
+
+    IF SY-SUBRC EQ 0.
+      " CS_GS_SUM (CHANGING 파라미터)의 동적 필드에 할당
+      ASSIGN COMPONENT LV_FIELD_NAME OF STRUCTURE CS_GS_SUM TO <FS_TARGET_FIELD>.
+      IF SY-SUBRC EQ 0.
+        <FS_TARGET_FIELD> = LS_SUM_STRING-WORD.
+      ENDIF.
+    ENDIF.
+  ENDLOOP.
+
+ENDFORM.
+*----------------------------------------------------------------------*
+* FORM Z_FORMAT_AMOUNT_TEXT
+*----------------------------------------------------------------------*
+* DESCRIPTION: 금액/수량 텍스트 포맷팅 (콤마 추가 및 소수점 0 제거)
+*----------------------------------------------------------------------*
+* CHANGING P_TEXT_FIELD TYPE STRING/CHAR (포맷팅될 문자열 필드)
+*----------------------------------------------------------------------*
+FORM Z_FORMAT_AMOUNT_TEXT CHANGING P_TEXT_FIELD TYPE ANY. " 또는 CHARxx
+  " 공백 제거 (CONDENSE 또는 SHIFT 사용)
+  CONDENSE P_TEXT_FIELD NO-GAPS. " STRIP이 안되면 CONDENSE 사용
+
+  " 소수점 이하 .00 또는 ,00 제거
+  REPLACE ALL OCCURRENCES OF PCRE '\.0+$' IN P_TEXT_FIELD WITH ''.
+  REPLACE ALL OCCURRENCES OF PCRE '\,0+$' IN P_TEXT_FIELD WITH ''.
+
+  " 백슬래시를 W로 변경 (필요하다면 추가)
+  REPLACE ALL OCCURRENCES OF '\' IN P_TEXT_FIELD WITH 'W'.
+ENDFORM.
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*& Form HANDLER_DOUBLE_CLICK
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*&      --> ES_ROW_NO
+*&      --> E_COLUMN
+*&---------------------------------------------------------------------*
+FORM HANDLER_DOUBLE_CLICK  USING    P_ES_ROW_NO TYPE LVC_S_ROID
+                                    P_E_COLUMN.
+
+  DATA: LV_EBELN   TYPE EBELN,  " 구매오더번호
+        LV_EBELP   TYPE EBELP,  " 라인아이템번호
+        LV_PARTNER TYPE BU_PARTNER, " BP 번호
+        LV_MATNR TYPE MATNR.
+
+  DATA(LV_INDEX) = P_ES_ROW_NO-ROW_ID.
+
+  READ TABLE GT_DATA INTO DATA(GS_DATA) INDEX LV_INDEX.
+  IF SY-SUBRC <> 0.
+    RETURN.
+  ENDIF.
+
+  " 구매오더 클릭 시 ME23N 호출
+  IF P_E_COLUMN = 'EBELN'. " 구매오더 필드명
+    LV_EBELN = GS_DATA-EBELN.
+    LV_EBELP = GS_DATA-EBELP.
+
+    SET PARAMETER ID 'BES' FIELD LV_EBELN.
+    SET PARAMETER ID 'BSP' FIELD LV_EBELP.
+
+    CALL TRANSACTION 'ME23N' AND SKIP FIRST SCREEN.
+
+    " BP 클릭 시 BP 트랜잭션 호출
+  ELSEIF P_E_COLUMN = 'LIFNR'. " BP 필드명 (ALV 필드명 기준 확인)
+    LV_PARTNER = GS_DATA-LIFNR.
+
+    SET PARAMETER ID 'BPA' FIELD LV_PARTNER. " BP 트랜잭션 파라미터
+
+    CALL TRANSACTION 'BP' AND SKIP FIRST SCREEN.
+
+  ELSEIF P_E_COLUMN = 'MATNR'.
+    LV_MATNR = GS_DATA-MATNR.
+    SET PARAMETER ID 'MAT' FIELD LV_MATNR. " 자재코드 트랜잭션 파마리터
+*      GET PARAMETER ID 'MAT' FIELD lv_check_ebelp.
+
+    CALL TRANSACTION 'MM03' AND SKIP FIRST SCREEN.
+
+
+  ENDIF.
+
+ENDFORM.

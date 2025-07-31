@@ -1,0 +1,37 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0020_I01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE USER_COMMAND_0100 INPUT.
+  GV_OKCODE = SY-UCOMM.
+  CLEAR SY-UCOMM.
+
+  CASE  GV_OKCODE.
+    WHEN 'BACK' OR 'CANC' OR 'EXIT'.
+      LEAVE TO SCREEN 0.
+    WHEN 'REFR'.
+      PERFORM REFRESH_GRID.
+    WHEN OTHERS.
+  ENDCASE.
+
+ENDMODULE.
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0110  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE USER_COMMAND_0110 INPUT.
+
+  CASE GV_OKCODE.
+    WHEN 'OKAY' OR 'CANC'.
+      LEAVE TO SCREEN 0.
+    WHEN OTHERS.
+  ENDCASE.
+
+  CLEAR: GV_OKCODE.
+
+ENDMODULE.

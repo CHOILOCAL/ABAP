@@ -1,0 +1,23 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0031_I01
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+MODULE USER_COMMAND_0100 INPUT.
+  GV_OKCODE = SY-UCOMM.
+  CLEAR SY-UCOMM.
+
+  CASE  GV_OKCODE.
+    WHEN 'BACK' OR 'CANC' OR 'EXIT'.
+      LEAVE TO SCREEN 0.
+    WHEN 'REFR'.
+      PERFORM REFRESH_GRID.
+    WHEN 'PDFD'.
+      PERFORM READ_SMARTFORMS.
+    WHEN OTHERS.
+  ENDCASE.
+
+ENDMODULE.

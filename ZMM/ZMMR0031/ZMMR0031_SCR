@@ -1,0 +1,11 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0031_SCR
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK B1 WITH FRAME TITLE TEXT-001.
+
+  SELECT-OPTIONS : S_WERKS FOR MARC-WERKS. "플랜트
+  SELECT-OPTIONS : S_MATNR FOR MARC-MATNR. " 자재코드
+  SELECT-OPTIONS:  S_EBELN FOR EKKO-EBELN. " PO 번호
+  SELECT-OPTIONS : S_AEDAT FOR SY-DATUM OBLIGATORY. " PO 생성일
+
+SELECTION-SCREEN END OF BLOCK B1.

@@ -1,0 +1,282 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0020_TOP
+*&---------------------------------------------------------------------*
+
+*----------------------------------------------------------------------*
+* TABLES
+*----------------------------------------------------------------------*
+TABLES: MATDOC, MARD, MARDH, MARA, MARC, MBEW, MBEWH, ZMMT0040, T134T, T001.
+
+*----------------------------------------------------------------------*
+* INCLUDE
+*----------------------------------------------------------------------*
+INCLUDE: <ICON>, <SYMBOL>.
+
+*----------------------------------------------------------------------*
+* CONSTANTS
+*----------------------------------------------------------------------*
+CONSTANTS : GC_E TYPE C LENGTH 1 VALUE 'E',
+            GC_U TYPE C LENGTH 1 VALUE 'U',
+            GC_C TYPE C LENGTH 1 VALUE 'C',
+            GC_R TYPE C LENGTH 1 VALUE 'R',
+            GC_L TYPE C LENGTH 1 VALUE 'L',
+            GC_V TYPE C LENGTH 1 VALUE 'V',
+            GC_S TYPE C LENGTH 1 VALUE 'S',
+            GC_X TYPE C LENGTH 1 VALUE 'X',
+            GC_H TYPE C LENGTH 1 VALUE 'H'.
+
+
+*----------------------------------------------------------------------*
+* GLOBAL DATA
+*----------------------------------------------------------------------*
+DATA: GV_OKCODE  TYPE SY-UCOMM,
+*--- 기준 년월
+      GV_YEAR    TYPE BDATJ,
+      GV_MONTH   TYPE LFMON,
+*--- 이전월의 연도/월 From일자 기준
+      GV_YEAR_F  TYPE BDATJ,
+      GV_MONTH_F TYPE LFMON,
+*--- 이전월의 연도/월 To일자 기준
+      GV_YEAR_T  TYPE BDATJ,
+      GV_MONTH_T TYPE LFMON,
+
+      GV_DD_B    TYPE LFMON. " 24.07.04 ~ 25.07.06 조회일 경우, 07.01 ~ 07.05
+*----------------------------------------------------------------------*
+* TYPE
+*----------------------------------------------------------------------*
+TYPES: BEGIN OF TY_RESULT,
+         MATNR          LIKE MARA-MATNR,
+         WERKS          LIKE MARDH-WERKS,
+         LGORT          LIKE MARDH-LGORT,
+         TOTAL_QUANTITY LIKE MARDH-LABST,
+         MEINS          LIKE MARA-MEINS,
+       END OF TY_RESULT.
+
+" 입/출고 수량
+TYPES: BEGIN OF TY_SH,
+         MATNR LIKE MATDOC-MATNR,
+         WERKS LIKE MATDOC-WERKS,
+         LGORT LIKE MATDOC-LGORT,
+         SHKZG LIKE MATDOC-SHKZG,
+         MENGE LIKE MATDOC-MENGE,
+       END OF TY_SH.
+
+" 기초 재고 금액
+TYPES: BEGIN OF TY_SALK3,
+         MATNR LIKE MBEWH-MATNR,
+         BWKEY LIKE MBEWH-BWKEY,
+         SALK3 LIKE MBEWH-SALK3,
+         LBKUM LIKE MBEWH-LBKUM,
+       END OF TY_SALK3.
+
+" 입고/출고  재고 금액
+TYPES: BEGIN OF TY_DMBTR,
+         MATNR LIKE MATDOC-MATNR,
+         WERKS LIKE MATDOC-WERKS,
+         LGORT LIKE MATDOC-LGORT,
+         SHKZG LIKE MATDOC-SHKZG,
+         DMBTR LIKE MATDOC-DMBTR,
+         BUDAT LIKE MATDOC-BUDAT,
+       END OF TY_DMBTR.
+
+" 평가 금액
+TYPES: BEGIN OF TY_PRS,
+         MATNR LIKE MBEW-MATNR,
+         BWKEY LIKE MBEW-BWKEY,
+         KALN1 LIKE MBEW-KALN1,
+         VPRSV LIKE MBEW-VPRSV,
+         STPRS LIKE MBEW-STPRS,
+         VERPR LIKE MBEW-VERPR,
+         WAERS LIKE CKMLCR-WAERS,
+         BDATJ LIKE CKMLCR-BDATJ,
+         POPER LIKE CKMLCR-POPER,
+         LFGJA LIKE MBEW-LFGJA, " 회계년도 YYYY
+         LFMON LIKE MBEW-LFMON, " 회계연월 MM
+       END OF TY_PRS.
+
+" 평가 금액 (과거)
+TYPES: BEGIN OF TY_PRS_B,
+         MATNR LIKE MBEW-MATNR,
+         BWKEY LIKE MBEW-BWKEY,
+         VPRSV LIKE MBEW-VPRSV,
+         VERPR LIKE MBEW-VERPR,
+         STPRS LIKE MBEW-STPRS,
+       END OF TY_PRS_B.
+
+TYPES: BEGIN OF TY_PRS_BH,
+         MATNR LIKE MBEWH-MATNR,
+         BWKEY LIKE MBEWH-BWKEY,
+         LFGJA LIKE MBEWH-LFGJA,
+         LFMON LIKE MBEWH-LFMON,
+         VPRSV LIKE MBEW-VPRSV,
+         VERPR LIKE MBEWH-VERPR,
+         STPRS LIKE MBEWH-STPRS,
+       END OF TY_PRS_BH.
+
+TYPES: BEGIN OF TY_CUR,
+         MATNR LIKE MARD-MATNR,
+         WERKS LIKE MARD-WERKS,
+         LGORT LIKE MARD-LGORT,
+         LABST LIKE MARD-LABST,
+       END OF TY_CUR.
+
+TYPES: BEGIN OF TY_CUR_A,
+         MATNR LIKE MBEW-MATNR,
+         BWKEY LIKE MBEW-BWKEY,
+         SALK3 LIKE MBEW-SALK3,
+       END OF TY_CUR_A.
+
+*----------------------------------------------------------------------*
+* DATAS
+*----------------------------------------------------------------------*
+DATA: BEGIN OF GS_DATA,
+        WERKS        LIKE T001W-WERKS, " 플랜트
+        NAME1        LIKE T001W-NAME1, " 플랜트명
+        LGORT        LIKE MARD-LGORT, "  저장위치
+        LGOBE        LIKE T001L-LGOBE, " 저장위치명
+        MATNR        LIKE MARD-MATNR, " 자재코드
+        MAKTX        LIKE MAKT-MAKTX, " 자재코드명
+        MTART        LIKE T134T-MTART, " 자재 유형
+        MTBEZ        LIKE T134T-MTBEZ, " 자재 유형 내역
+        OPEST        LIKE MATDOC-MENGE, " 기초 재고
+        OPEST_AMOUNT LIKE MBEWH-SALK3, " 기초 재고 금액
+        GRQTY        LIKE MATDOC-MENGE, " 입고 수량
+        GRQTY_AMOUNT LIKE MATDOC-DMBTR, " 입고 재고 금액
+        ISQTY        LIKE MATDOC-MENGE, " 출고 수량
+        ISQTY_AMOUNT LIKE MATDOC-DMBTR, " 출고 재고 금액
+        CLOST        LIKE MATDOC-MENGE, " 기말 수량 ( 기초 재고 + 입고 수량 - 출고 수량 )
+        CLOST_AMOUNT LIKE MATDOC-DMBTR, " 기말 재고 금액 ( TO 평가금액 * 기말 수량 )
+        CURST        LIKE MATDOC-MENGE, " 현 재고 수량
+        CURST_AMOUNT LIKE MATDOC-DMBTR, " 현 재고 금액
+        VPRSV        LIKE CKMLCR-VPRSV, " 가격 관리 지시자, S or V
+        VERPR        LIKE MBEW-VERPR, " 이평가, 사용 미정
+        STPRS        LIKE MBEW-STPRS, " 표준평가
+        MEINS        LIKE MATDOC-MEINS, " 단위
+        WAERS        LIKE MATDOC-WAERS, "통화
+        LABST        LIKE MARD-LABST, " 재고
+        SHKZG        LIKE MATDOC-SHKZG,
+        BKLAS        LIKE MBEW-BKLAS, " 평가클래스,
+        BKBEZ        LIKE T025T-BKBEZ, " 평가클래스명
+      END OF GS_DATA,
+      GT_DATA LIKE TABLE OF GS_DATA.
+
+*----------------------------------------------------------------------*
+* ALV
+*----------------------------------------------------------------------*
+DATA:
+  GO_DOCK    TYPE REF TO CL_GUI_DOCKING_CONTAINER,
+  GO_CONT    TYPE REF TO CL_GUI_CONTAINER,
+  GO_GRID    TYPE REF TO CL_GUI_ALV_GRID,
+
+  GT_TOOL    TYPE UI_FUNCTIONS,
+  GT_FCAT    TYPE LVC_T_FCAT,
+  GT_SORT    TYPE LVC_T_SORT,
+  GT_ROID    TYPE LVC_T_ROID,
+  GT_EXC     TYPE UI_FUNCTIONS,
+
+  GS_FCAT    TYPE LVC_S_FCAT,
+  GS_SORT    TYPE LVC_S_SORT,
+  GS_LAYO    TYPE LVC_S_LAYO,
+  GS_STBL    TYPE LVC_S_STBL,
+  GS_BUTN    TYPE STB_BUTTON,
+  GS_EXC     TYPE UI_FUNC,
+  GS_VARIANT TYPE DISVARIANT.
+
+*----------------------------------------------------------------------*
+* CLASS
+*----------------------------------------------------------------------*
+*CLASS : LCL_EVENT_RECEIVER DEFINITION DEFERRED.
+*DATA : GO_EVENT_RECEIVER TYPE REF TO LCL_EVENT_RECEIVER.
+
+" 현 재고
+TYPES: BEGIN OF TY_MARA,
+         WERKS LIKE MARD-WERKS, " 플랜트
+         MATNR LIKE MARA-MATNR, "자재코드
+         LGORT LIKE MARD-LGORT, " 저장위치
+       END OF TY_MARA.
+
+DATA: GT_MARA TYPE STANDARD TABLE OF TY_MARA,
+      GS_MARA TYPE TY_MARA.
+
+" 이동 내역
+TYPES: BEGIN OF TY_MAT,
+         BWART LIKE MATDOC-BWART, " 이동유형
+         WERKS LIKE MATDOC-WERKS, " 플랜트
+         LGORT LIKE MATDOC-LGORT, "저장위치
+         MENGE LIKE MATDOC-MENGE, " 수량
+         MEINS LIKE MATDOC-MEINS, " 단위
+         SHKZG LIKE MATDOC-SHKZG, " S/H (S: 입고, H: 출고)
+       END OF TY_MAT.
+
+DATA: GT_MAT TYPE STANDARD TABLE OF TY_MAT,
+      GS_MAT TYPE TY_MARA.
+
+"  기초 재고 (1 + 2 = A)
+" = A
+" 1) 전월 기말 재고
+TYPES: BEGIN OF TY_MAR_A,
+*         BWART LIKE MATDOC-BWART, " 이동유형
+         MATNR LIKE MARDH-MATNR, " 자재번호
+         WERKS LIKE MARDH-WERKS, " 플랜트
+         LGORT LIKE MARDH-LGORT, "저장위치
+         LABST LIKE MARDH-LABST, " 수량
+         MEINS LIKE MARA-MEINS, " 단위
+         MENGE LIKE MARDH-LABST, " 재고량
+*         SHKZG LIKE MATDOC-SHKZG, " S/H (S: 입고, H: 출고)
+       END OF TY_MAR_A.
+
+DATA: GT_MAR_A TYPE STANDARD TABLE OF TY_MAR_A,
+      GS_MAR_A TYPE TY_MAR_A.
+
+" 2) 조회 From 일자가 1일이 아닌경우 1일부터 'From일자 -1'일 까지 재고 이동 내역
+TYPES: BEGIN OF TY_MAR_B,
+         BWART LIKE MATDOC-BWART, " 이동유형
+         WERKS LIKE MATDOC-WERKS, " 플랜트
+         LGORT LIKE MATDOC-LGORT, "저장위치
+         MATNR LIKE MATDOC-MATNR,
+         MENGE LIKE MATDOC-MENGE, " 수량
+         MEINS LIKE MATDOC-MEINS, " 단위
+         SHKZG LIKE MATDOC-SHKZG, " S/H (S: 입고, H: 출고)
+         BUDAT LIKE MATDOC-BUDAT,
+         MBLNR LIKE MATDOC-MBLNR, " 자재문서 번호
+         ZEILE LIKE MATDOC-ZEILE, " 항목
+       END OF TY_MAR_B.
+
+DATA: GT_MAR_B TYPE STANDARD TABLE OF TY_MAR_B,
+      GS_MAR_B TYPE TY_MAR_B.
+
+DATA: GT_SH TYPE STANDARD TABLE OF TY_SH,
+      GS_SH TYPE TY_SH.
+
+DATA: GT_SALK3 TYPE STANDARD TABLE OF TY_SALK3,
+      GS_SALK3 TYPE TY_SALK3.
+
+DATA: GT_DMBTR TYPE STANDARD TABLE OF TY_DMBTR,
+      GS_DMBTR TYPE TY_DMBTR.
+
+DATA: GT_PRS TYPE STANDARD TABLE OF TY_PRS,
+      GS_PRS TYPE TY_PRS.
+
+DATA: GT_PRS_B TYPE STANDARD TABLE OF TY_PRS_B,
+      GS_PRS_B TYPE TY_PRS_B.
+
+DATA: GT_PRS_BH TYPE STANDARD TABLE OF TY_PRS_BH,
+      GS_PRS_BH TYPE TY_PRS_BH.
+
+DATA: GT_CUR TYPE STANDARD TABLE OF TY_CUR,
+      GS_CUR TYPE TY_CUR.
+
+DATA: GT_CUR_A TYPE STANDARD TABLE OF TY_CUR_A,
+      GS_CUR_A TYPE TY_CUR_A.
+
+*----------------------------------------------------------------------*
+* SELECTION OPTION
+*----------------------------------------------------------------------*
+DEFINE _NAME.
+  CLEAR &1.
+  &1-SIGN = &2.
+  &1-OPTION = 'BT'.
+  &1-LOW = &3.
+  &1-HIGH = &4.
+  APPEND &1 TO &5.
+END-OF-DEFINITION.

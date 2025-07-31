@@ -1,0 +1,144 @@
+*&---------------------------------------------------------------------*
+*& Include          ZMMR0031_TOP
+*&---------------------------------------------------------------------*
+
+*----------------------------------------------------------------------*
+* TABLES
+*----------------------------------------------------------------------*
+TABLES: MARC, EKKO, EKPO, LFA1, T001W, T024, ADR2, ADRC.
+
+*----------------------------------------------------------------------*
+* INCLUDE
+*----------------------------------------------------------------------*
+INCLUDE: <ICON>, <SYMBOL>.
+
+*----------------------------------------------------------------------*
+* CONSTANTS
+*----------------------------------------------------------------------*
+CONSTANTS : GC_E       TYPE C LENGTH 1 VALUE 'E',
+            GC_U       TYPE C LENGTH 1 VALUE 'U',
+            GC_C       TYPE C LENGTH 1 VALUE 'C',
+            GC_R       TYPE C LENGTH 1 VALUE 'R',
+            GC_L       TYPE C LENGTH 1 VALUE 'L',
+            GC_V       TYPE C LENGTH 1 VALUE 'V',
+            GC_S       TYPE C LENGTH 1 VALUE 'S',
+            GC_X       TYPE C LENGTH 1 VALUE 'X',
+            GC_A       TYPE C LENGTH 1 VALUE 'A',
+            GC_PDF     TYPE C LENGTH 3 VALUE 'PDF',
+            GC_TAXTYPE TYPE DFKKBPTAXNUM-TAXTYPE VALUE 'KR2',
+            GC_F01     TYPE C LENGTH 3 VALUE 'F01'. " 헤더 텍스트
+*            GC_F02     TYPE C LENGTH 3 VALUE 'F02', " 헤더 노트
+*            GC_F05     TYPE C LENGTH 3 VALUE 'F05', " 납품 조건
+*            GC_F11     TYPE C LENGTH 3 VALUE 'F11'. "계약추가조항
+
+
+*----------------------------------------------------------------------*
+* GLOBAL DATA
+*----------------------------------------------------------------------*
+DATA: GV_OKCODE  TYPE SY-UCOMM.
+
+
+*----------------------------------------------------------------------*
+* TYPE
+*----------------------------------------------------------------------*
+
+*----------------------------------------------------------------------*
+* DATAS
+*----------------------------------------------------------------------*
+*DATA: BEGIN OF GS_DATA,
+*        WERKS         TYPE EKPO-WERKS, " 플랜트(사업소)
+*        NAME1         TYPE T001W-NAME1, " 플랜트명
+*        EBELN         TYPE EKPO-EBELN, " 구매오더 번호
+*        EKGRP         TYPE EKKO-EKGRP, " 구매그룹
+*        EKNAM         TYPE T024-EKNAM, " 담당자
+*        EKTEL         TYPE T024-EKTEL, " 담당자 연락처
+*        SMTP_ADDR     TYPE T024-SMTP_ADDR, " 담당자 이메일
+*        LIFNR         TYPE EKKO-LIFNR, " 공급업체 번호
+*        NAME2         TYPE LFA1-LIFNR, " 공급업체명
+*        TAXNUM        TYPE DFKKBPTAXNUM-TAXNUM, " 공급업체 사업자등록번호 (PARTNR, TAXNUM)
+*        J_1KFREPRE    TYPE LFA1-J_1KFREPRE, " 공급업체 대표자명
+*        TEL_EXTENS    TYPE ADR2-TEL_EXTENS, " 대표 전화번호
+*        TEL_NUMBER    TYPE ADR2-TEL_NUMBER, " 담당자 연락처
+*        CONTRACT_NUM  TYPE STRING, " 계약 관리 번호
+*        ZTERM         TYPE EKKO-ZTERM, " 지급조건 코드
+*        TEXT1         TYPE T052U-TEXT1, " 지급조건명 (SPRAS, ZTERM)
+*        TEST_S        TYPE STRING, " 검사방법
+*
+*        DELIVERYTERMS TYPE STRING, " 납품조건
+*
+*        AEDAT         TYPE EKKO-AEDAT, " 구매오더 생성일
+*        EBELP         TYPE EKPO-EBELP, " 구매오더 라인번호
+*        MATNR         TYPE EKPO-MATNR, " 자재코드
+*        TXZ01         TYPE EKPO-TXZ01, " 자재코드 내역
+*
+*        CITY1 TYPE ADRC-CITY1,
+*        CITY2 TYPE ADRC-CITY2,
+*        STREET TYPE ADRC-STREET,
+*        CITY_STREET TYPE C LENGTH 10,
+*
+*        MENGE         TYPE EKPO-MENGE, " 수량
+*        PEINH         TYPE EKPO-PEINH, " 단가 단위
+*        MEINS         TYPE EKPO-MEINS, " 수량 단위
+*        NETPR         TYPE EKPO-NETPR, " 단가
+*        NETWR         TYPE EKPO-NETWR, " 금액
+*        PEINH_KRW         TYPE EKPO-PEINH, " 통화
+*
+*        LGORT         TYPE EKPO-LGORT, " 저장위치
+*        LGOBE         TYPE T001L-LGOBE, " 저장위치명
+*        EINDT         TYPE EKET-EINDT, " 남품일
+*      END OF GS_DATA,
+*      GT_DATA LIKE TABLE OF GS_DATA.
+
+" Smartforms (원사업자)
+DATA: GS_REPRES TYPE ZMMPOS0033.
+*      GT_REPRES TYPE STANDARD TABLE OF ZMMPOS0033.
+
+" Smartforms (수급사업자)
+*DATA: GS_BP TYPE ZMMPOS0034.
+
+DATA: GS_DATA TYPE ZMMPOS0031,
+      GT_DATA TYPE STANDARD TABLE OF ZMMPOS0031.
+
+DATA: GS_SUM TYPE ZMMPOS0032,
+      GT_SUM TYPE STANDARD TABLE OF ZMMPOS0032.
+
+*----------------------------------------------------------------------*
+* ALV
+*----------------------------------------------------------------------*
+DATA:
+  GO_DOCK    TYPE REF TO CL_GUI_DOCKING_CONTAINER,
+  GO_CONT    TYPE REF TO CL_GUI_CONTAINER,
+  GO_GRID    TYPE REF TO CL_GUI_ALV_GRID,
+
+  GT_TOOL    TYPE UI_FUNCTIONS,
+  GT_FCAT    TYPE LVC_T_FCAT,
+  GT_SORT    TYPE LVC_T_SORT,
+  GT_ROID    TYPE LVC_T_ROID,
+  GT_EXC     TYPE UI_FUNCTIONS,
+
+  GS_FCAT    TYPE LVC_S_FCAT,
+  GS_LAYO    TYPE LVC_S_LAYO,
+  GS_SORT    TYPE LVC_S_SORT,
+  GS_STBL    TYPE LVC_S_STBL,
+  GS_BUTN    TYPE STB_BUTTON,
+  GS_EXC     TYPE UI_FUNC,
+  GS_VARIANT TYPE DISVARIANT.
+
+*----------------------------------------------------------------------*
+* CLASS
+*----------------------------------------------------------------------*
+*CLASS : LCL_EVENT_RECEIVER DEFINITION DEFERRED.
+*DATA : GO_EVENT_RECEIVER TYPE REF TO LCL_EVENT_RECEIVER.
+
+
+*----------------------------------------------------------------------*
+* SELECTION OPTION
+*----------------------------------------------------------------------*
+DEFINE _NAME.
+  CLEAR &1.
+  &1-SIGN = &2.
+  &1-OPTION = 'BT'.
+  &1-LOW = &3.
+  &1-HIGH = &4.
+  APPEND &1 TO &5.
+END-OF-DEFINITION.
